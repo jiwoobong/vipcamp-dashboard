@@ -756,7 +756,7 @@ function initSentiment() {
     ${topRanked.map((c,i) => {
       const d = c.score_detail || {};
       const isVip = c.name === VIP_NAME;
-      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      const medal = i===0?'1st':i===1?'2nd':i===2?'3rd':'';
       const bg = isVip ? 'background:#f59e0b15;border-radius:6px;padding:4px 6px;border-left:3px solid #f59e0b;' : '';
       const cnv = c.naver_visitor_review||0, cnb = c.naver_blog_review||0;
       return \`<div style="font-size:16px;font-weight:700;color:\${i<3?'#f59e0b':'#94a3b8'};text-align:center">\${medal || (i+1)}</div>

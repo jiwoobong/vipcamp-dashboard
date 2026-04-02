@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VIP캠핑장 상권분석 대시보드</title>
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=c8fa7a1f109b46c0cf3c7bcbea3623c0&libraries=clusterer"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard','Apple SD Gothic Neo',sans-serif; background:#0f172a; color:#e2e8f0; }
+.header { background:linear-gradient(135deg,#1e293b,#0f172a); padding:20px 30px; border-bottom:1px solid #334155; display:flex; align-items:center; justify-content:space-between; }
+.header h1 { font-size:22px; color:#f8fafc; }
+.header h1 span { color:#f59e0b; }
+.header .stats { display:flex; gap:20px; }
+.stat-box { background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 18px; text-align:center; }
+.stat-box .num { font-size:24px; font-weight:700; color:#38bdf8; }
+.stat-box .label { font-size:11px; color:#94a3b8; margin-top:2px; }
+
+.tabs { display:flex; background:#1e293b; border-bottom:1px solid #334155; padding:0 20px; }
+.tab { padding:12px 24px; cursor:pointer; font-size:14px; color:#94a3b8; border-bottom:2px solid transparent; transition:all .2s; }
+.tab:hover { color:#e2e8f0; }
+.tab.active { color:#38bdf8; border-bottom-color:#38bdf8; }
+
+.panel { display:none; height:calc(100vh - 130px); }
+.panel.active { display:flex; }
+
+/* Tab 1: Map */
+#tab-map { flex-direction:row; }
+#map-container { flex:1; position:relative; }
+#map { width:100%; height:100%; }
+.map-sidebar { width:320px; background:#1e293b; overflow-y:auto; border-left:1px solid #334155; }
+.sidebar-header { padding:14px 16px; border-bottom:1px solid #334155; }
+.sidebar-header input { width:100%; padding:8px 12px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+.camp-list { list-style:none; }
+.camp-item { padding:12px 16px; border-bottom:1px solid #1e293b44; cursor:pointer; transition:background .15s; }
+.camp-item:hover { background:#334155; }
+.camp-item .name { font-size:13px; font-weight:600; color:#f1f5f9; }
+.camp-item .meta { font-size:11px; color:#94a3b8; margin-top:4px; display:flex; gap:8px; flex-wrap:wrap; }
+.camp-item .rating { color:#fbbf24; }
+.camp-item .naver { color:#2db400; }
+.source-badge { display:inline-block; padding:1px 5px; border-radius:3px; font-size:9px; font-weight:600; }
+.source-badge.kakao { background:#fee50040; color:#fbbf24; }
+.source-badge.naver { background:#2db40030; color:#2db400; }
+.camp-item.vip { border-left:3px solid #f59e0b; }
+.filter-row { padding:10px 16px; display:flex; gap:8px; flex-wrap:wrap; }
+.filter-btn { padding:4px 10px; border-radius:12px; border:1px solid #475569; background:transparent; color:#94a3b8; font-size:11px; cursor:pointer; }
+.filter-btn.active { background:#38bdf8; color:#0f172a; border-color:#38bdf8; }
+
+/* Tab 2: Positioning */
+#tab-pos { flex-direction:column; padding:20px; gap:20px; overflow-y:auto; }
+.chart-row { display:flex; gap:20px; flex:1; min-height:400px; }
+.chart-box { flex:1; background:#1e293b; border-radius:12px; padding:20px; border:1px solid #334155; position:relative; }
+.chart-box h3 { font-size:14px; color:#94a3b8; margin-bottom:10px; }
+.guide-box { background:#1e293b; border:1px solid #334155; border-radius:12px; padding:18px 22px; margin-bottom:0; }
+.guide-box h3 { font-size:15px; color:#38bdf8; margin-bottom:10px; }
+.guide-box p { font-size:12px; color:#94a3b8; line-height:1.7; margin:4px 0; }
+.guide-box .guide-item { display:flex; gap:10px; margin:8px 0; align-items:flex-start; }
+.guide-box .guide-num { background:#38bdf820; color:#38bdf8; min-width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
+.guide-box .guide-text { font-size:12px; color:#cbd5e1; line-height:1.6; }
+.guide-box .guide-text strong { color:#f8fafc; }
+.guide-box .tip { background:#f59e0b15; border-left:3px solid #f59e0b; padding:8px 12px; margin-top:10px; border-radius:0 6px 6px 0; font-size:11px; color:#fbbf24; }
+
+/* Tab 3: Heatmap */
+#tab-heat { flex-direction:column; }
+#heatmap { flex:1; }
+.heat-legend { padding:12px 20px; background:#1e293b; display:flex; align-items:center; gap:15px; font-size:12px; }
+.legend-bar { width:200px; height:14px; border-radius:7px; background:linear-gradient(90deg,#22d3ee,#facc15,#ef4444); }
+
+/* Tab 4: Sentiment */
+#tab-sent { flex-direction:column; padding:20px; gap:20px; overflow-y:auto; }
+.sent-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.sent-card { background:#1e293b; border-radius:12px; padding:20px; border:1px solid #334155; }
+.sent-card h3 { font-size:15px; margin-bottom:12px; color:#f1f5f9; }
+.keyword-cloud { display:flex; flex-wrap:wrap; gap:8px; }
+.keyword { padding:4px 12px; border-radius:16px; font-size:12px; }
+.keyword.pos { background:#065f4620; color:#34d399; border:1px solid #34d39940; }
+.keyword.neg { background:#7f1d1d20; color:#f87171; border:1px solid #f8717140; }
+.sent-bar { height:24px; border-radius:12px; overflow:hidden; display:flex; margin:8px 0; }
+.sent-bar .pos-fill { background:#34d399; }
+.sent-bar .neg-fill { background:#f87171; }
+.sent-bar .neu-fill { background:#64748b; }
+.review-item { padding:10px 0; border-bottom:1px solid #33415544; font-size:13px; }
+.review-item .camp-name { color:#38bdf8; font-weight:600; }
+.review-item .score { padding:2px 8px; border-radius:10px; font-size:11px; margin-left:8px; }
+.review-item .score.high { background:#065f4620; color:#34d399; }
+.review-item .score.mid { background:#78350f20; color:#fbbf24; }
+.review-item .score.low { background:#7f1d1d20; color:#f87171; }
+
+.summary-row { display:flex; gap:20px; }
+.summary-card { flex:1; background:#1e293b; border-radius:12px; padding:18px; border:1px solid #334155; }
+.summary-card h4 { font-size:12px; color:#94a3b8; margin-bottom:6px; }
+.summary-card .value { font-size:28px; font-weight:700; }
+.summary-card .value.good { color:#34d399; }
+.summary-card .value.warn { color:#fbbf24; }
+.summary-card .value.bad { color:#f87171; }
+
+/* Info window */
+.info-window { padding:10px; min-width:220px; font-family:'Apple SD Gothic Neo',sans-serif; }
+.info-window .iw-title { font-size:14px; font-weight:700; color:#1e293b; margin-bottom:6px; }
+.info-window .iw-row { font-size:12px; color:#475569; margin:3px 0; }
+.info-window .iw-rating { color:#f59e0b; font-weight:600; }
+.info-window .iw-naver { color:#2db400; font-weight:600; }
+.info-window .iw-vip { background:#f59e0b; color:#fff; padding:1px 6px; border-radius:4px; font-size:10px; }
+.info-window .iw-score { font-size:13px; font-weight:700; margin-top:4px; padding:3px 8px; border-radius:6px; display:inline-block; }
+.pop-toggle { position:absolute; top:10px; right:10px; z-index:10; background:#1e293b; color:#e2e8f0; border:1px solid #475569; padding:6px 12px; border-radius:8px; font-size:12px; cursor:pointer; }
+.pop-toggle.active { background:#38bdf8; color:#0f172a; border-color:#38bdf8; }
+.pop-legend { position:absolute; bottom:10px; left:10px; z-index:10; background:#1e293bee; border-radius:8px; padding:10px 14px; font-size:11px; color:#94a3b8; display:none; }
+.pop-legend.show { display:block; }
+.pop-legend .leg-row { display:flex; align-items:center; gap:8px; margin:3px 0; }
+.pop-legend .leg-circle { border-radius:50%; display:inline-block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>VIP캠핑장</span> 상권분석 대시보드</h1>
+  <div class="stats">
+    <div class="stat-box"><div class="num" id="total-count">0</div><div class="label">총 캠핑장</div></div>
+    <div class="stat-box"><div class="num" id="avg-rating">0</div><div class="label">평균 평점(카카오)</div></div>
+    <div class="stat-box"><div class="num" id="avg-dist">0</div><div class="label">평균 거리(km)</div></div>
+    <div class="stat-box"><div class="num" id="vip-rank">0</div><div class="label">VIP 종합순위</div></div>
+    <div class="stat-box"><div class="num" id="vip-naver">0</div><div class="label">VIP 네이버리뷰</div></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="tab-map">지도</div>
+  <div class="tab" data-tab="tab-pos">포지셔닝 분석</div>
+  <div class="tab" data-tab="tab-heat">경쟁 밀도</div>
+  <div class="tab" data-tab="tab-sent">리뷰 감성분석</div>
+</div>
+
+<div class="panel active" id="tab-map">
+  <div id="map-container">
+    <div id="map"></div>
+    <button class="pop-toggle" id="pop-toggle" onclick="togglePopularity()">인기도 원 ON</button>
+    <div class="pop-legend" id="pop-legend">
+      <div style="font-weight:600;margin-bottom:4px;color:#e2e8f0">종합 인기도 점수</div>
+      <div style="font-size:10px;margin-bottom:6px">카카오 평점(30) + 카카오 리뷰수(20) + 네이버 방문자(25) + 블로그(15) + 네이버 평점(10)</div>
+      <div class="leg-row"><span class="leg-circle" style="width:12px;height:12px;background:#ef444480"></span> 70+ 핫플</div>
+      <div class="leg-row"><span class="leg-circle" style="width:10px;height:10px;background:#fbbf2480"></span> 40~70 인기</div>
+      <div class="leg-row"><span class="leg-circle" style="width:8px;height:8px;background:#38bdf880"></span> 20~40 보통</div>
+      <div class="leg-row"><span class="leg-circle" style="width:6px;height:6px;background:#64748b80"></span> 0~20 저조</div>
+      <div class="leg-row"><span class="leg-circle" style="width:10px;height:10px;background:#f59e0b80;border:2px solid #f59e0b"></span> VIP캠핑장</div>
+    </div>
+  </div>
+  <div class="map-sidebar">
+    <div class="sidebar-header">
+      <input type="text" id="search-input" placeholder="캠핑장 검색...">
+    </div>
+    <div class="filter-row">
+      <button class="filter-btn active" data-filter="all">전체</button>
+      <button class="filter-btn" data-filter="near">2km 이내</button>
+      <button class="filter-btn" data-filter="mid">2~4km</button>
+      <button class="filter-btn" data-filter="far">4km+</button>
+      <button class="filter-btn" data-filter="high">평점4+</button>
+    </div>
+    <ul class="camp-list" id="camp-list"></ul>
+  </div>
+</div>
+
+<div class="panel" id="tab-pos">
+  <div class="guide-box">
+    <h3>포지셔닝 분석 가이드</h3>
+    <p>VIP캠핑장(노란 별)이 경쟁사(파란 점) 사이에서 어디에 위치하는지 한눈에 파악할 수 있습니다. 데이터 출처: 카카오맵 평점/리뷰수</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
+      <div>
+        <div class="guide-item"><span class="guide-num">1</span><span class="guide-text"><strong>평점 vs 거리</strong> — 가까울수록+평점 높을수록 직접 경쟁자. VIP 별표가 위쪽(평점 높음)에 있어야 유리. 아래쪽이면 개선 시급.</span></div>
+        <div class="guide-item"><span class="guide-num">2</span><span class="guide-text"><strong>리뷰수 vs 평점</strong> — 원이 클수록 리뷰가 많아 영향력 큼. 오른쪽 위(고평점+많은리뷰)가 가장 강한 경쟁사.</span></div>
+      </div>
+      <div>
+        <div class="guide-item"><span class="guide-num">3</span><span class="guide-text"><strong>거리별 분포</strong> — 막대: 거리대별 캠핑장 수, 노란선: 평균 평점. 우리 주변에 몇 개가 있고 평점은 어떤지 확인.</span></div>
+        <div class="guide-item"><span class="guide-num">4</span><span class="guide-text"><strong>경쟁력 매트릭스</strong> — 빨간(위협): 평점 높고 리뷰 많음. 회색(미약): 신경 안 써도 됨. VIP는 현재 회색→노란 이동이 목표.</span></div>
+      </div>
+    </div>
+    <div class="tip">TIP: 차트 위에 마우스를 올리면 캠핑장 이름과 상세 수치를 확인할 수 있습니다.</div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box"><h3>평점 vs 거리 포지셔닝</h3><canvas id="chart-rating-dist"></canvas></div>
+    <div class="chart-box"><h3>리뷰수 vs 평점</h3><canvas id="chart-review-rating"></canvas></div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box"><h3>거리별 평점 분포</h3><canvas id="chart-dist-box"></canvas></div>
+    <div class="chart-box"><h3>경쟁력 매트릭스 (리뷰수 x 평점)</h3><canvas id="chart-matrix"></canvas></div>
+  </div>
+</div>
+
+<div class="panel" id="tab-heat">
+  <div id="heatmap" style="flex:1;position:relative">
+    <div style="position:absolute;top:10px;left:10px;z-index:10;background:#1e293bee;border-radius:10px;padding:14px 18px;max-width:340px;border:1px solid #334155">
+      <div style="font-size:14px;font-weight:600;color:#38bdf8;margin-bottom:6px">경쟁 밀도 히트맵 가이드</div>
+      <div style="font-size:11px;color:#cbd5e1;line-height:1.7">
+        <p style="margin:4px 0"><strong style="color:#ef4444">빨간 원</strong> = 캠핑장이 밀집된 구역 (경쟁 치열)</p>
+        <p style="margin:4px 0"><strong style="color:#fbbf24">노란 원</strong> = 중간 밀도 (적당한 경쟁)</p>
+        <p style="margin:4px 0"><strong style="color:#22d3ee">파란 원</strong> = 저밀도 (경쟁 적음)</p>
+        <p style="margin:4px 0"><strong style="color:#f59e0b">별 마커</strong> = VIP캠핑장 위치</p>
+        <p style="margin:4px 0">점선 원 = VIP 기준 1/2/3/5km 반경</p>
+        <p style="margin:8px 0 2px;padding:6px 10px;background:#f59e0b15;border-radius:6px;color:#fbbf24;font-size:10px">
+          <strong>활용법:</strong> VIP 주변이 빨간색이면 차별화 전략 필수. 파란 구역 쪽으로 마케팅 범위를 넓히거나, 밀집 지역에서 경쟁 우위 요소(가격/시설/리뷰)를 확보하세요.
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="heat-legend">
+    <span>경쟁 밀도:</span>
+    <span>낮음</span>
+    <div class="legend-bar"></div>
+    <span>높음</span>
+    <span style="margin-left:20px" id="heat-info"></span>
+    <span style="margin-left:10px;color:#64748b">| 기준: ~800m 격자 내 캠핑장 수</span>
+  </div>
+</div>
+
+<div class="panel" id="tab-sent">
+  <div class="summary-row" id="sent-summary"></div>
+  <div class="sent-grid" id="sent-grid"></div>
+</div>
+
+<script>
+// ============ DATA ============
+const CAMPS_DATA = CAMPS_PLACEHOLDER;
+const REVIEWS_DATA = REVIEWS_PLACEHOLDER;
+const VIP_CENTER = { lat: 37.7227114753825, lng: 126.949041624216 };
+const VIP_NAME = "양주장흥VIP캠핑장";
+
+// ============ INIT ============
+let map, heatmap, markers = [], infowindow;
+let currentFilter = 'all';
+let popCircles = [];
+let popLabels = [];
+let popVisible = false;
+
+document.addEventListener('DOMContentLoaded', () => {
+  initStats();
+  initTabs();
+  initMap();
+  initSidebar();
+  initPositioning();
+  initSentiment();
+});
+
+// ============ STATS ============
+function initStats() {
+  const ratings = CAMPS_DATA.filter(c => c.rating).map(c => c.rating);
+  const avgR = (ratings.reduce((a,b) => a+b, 0) / ratings.length).toFixed(1);
+  const avgD = (CAMPS_DATA.reduce((a,b) => a + b.distance_km, 0) / CAMPS_DATA.length).toFixed(1);
+  const sorted = [...CAMPS_DATA].sort((a,b) => (b.popularity_score||0) - (a.popularity_score||0));
+  const vipIdx = sorted.findIndex(c => c.name === VIP_NAME) + 1;
+  const vipCamp = CAMPS_DATA.find(c => c.name === VIP_NAME);
+  const vipNaver = vipCamp ? (vipCamp.naver_visitor_review || 0) : 0;
+  document.getElementById('total-count').textContent = CAMPS_DATA.length;
+  document.getElementById('avg-rating').textContent = avgR;
+  document.getElementById('avg-dist').textContent = avgD;
+  document.getElementById('vip-rank').textContent = `${vipIdx}/${CAMPS_DATA.length}`;
+  document.getElementById('vip-naver').textContent = `${vipNaver}`;
+}
+
+// ============ TABS ============
+function initTabs() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.tab).classList.add('active');
+      if (tab.dataset.tab === 'tab-heat' && !heatmap) initHeatmap();
+      if (tab.dataset.tab === 'tab-map') map.relayout();
+    });
+  });
+}
+
+// ============ MAP ============
+function initMap() {
+  map = new kakao.maps.Map(document.getElementById('map'), {
+    center: new kakao.maps.LatLng(VIP_CENTER.lat, VIP_CENTER.lng),
+    level: 7
+  });
+  infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
+
+  // VIP circle ranges
+  [2, 3, 5].forEach((r, i) => {
+    new kakao.maps.Circle({
+      map, center: new kakao.maps.LatLng(VIP_CENTER.lat, VIP_CENTER.lng),
+      radius: r * 1000,
+      strokeWeight: 1, strokeColor: '#38bdf8', strokeOpacity: 0.3 + i * 0.1,
+      fillColor: '#38bdf8', fillOpacity: 0.02
+    });
+  });
+
+  CAMPS_DATA.forEach((camp, i) => {
+    const isVip = camp.name === VIP_NAME;
+    const markerImg = new kakao.maps.MarkerImage(
+      isVip
+        ? 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png'
+        : 'https://t1.daumcdn.net/localimg/localimages/07/2018/pc/img/marker_spot.png',
+      new kakao.maps.Size(isVip ? 24 : 20, isVip ? 35 : 28)
+    );
+    const marker = new kakao.maps.Marker({
+      map, position: new kakao.maps.LatLng(camp.lat, camp.lng),
+      image: markerImg, title: camp.name
+    });
+    marker.campData = camp;
+    marker.campIndex = i;
+
+    kakao.maps.event.addListener(marker, 'click', () => {
+      const c = camp;
+      const nv = c.naver_visitor_review || 0;
+      const nb = c.naver_blog_review || 0;
+      const nr = c.naver_rating;
+      const content = `<div class="info-window">
+        <div class="iw-title">${c.name} ${isVip ? '<span class="iw-vip">OUR</span>' : ''}</div>
+        <div class="iw-row iw-rating"><span style="background:#fee500;color:#3c1e1e;padding:1px 4px;border-radius:3px;font-size:9px">카카오</span> ★ ${c.rating || '-'} (리뷰 ${c.review_count || 0}개)</div>
+        <div class="iw-row iw-naver"><span style="background:#2db400;color:#fff;padding:1px 4px;border-radius:3px;font-size:9px">네이버</span> ${nr ? '★ '+nr : ''} 방문자 ${nv} | 블로그 ${nb}</div>
+        ${c.camfit_review_count ? `<div class="iw-row" style="color:#ff6b35"><span style="background:#ff6b35;color:#fff;padding:1px 4px;border-radius:3px;font-size:9px">캠핏</span> 캠핑로그 ${c.camfit_review_count}개</div>` : ''}
+        <div class="iw-row" style="font-size:11px">${c.has_own_website ? '🔗 자체 예약사이트 운영' : '플랫폼 예약만'} ${(c.booking_platforms||[]).join(', ')}</div>
+        <div class="iw-row">${c.address}</div>
+        <div class="iw-row">거리: ${c.distance_km}km ${c.phone ? '| ' + c.phone : ''}</div>
+        ${c.site_count ? `<div class="iw-row">사이트: ${c.site_count}개</div>` : ''}
+        <div class="iw-row iw-score" style="background:${c.popularity_score>=70?'#ef444430;color:#f87171':c.popularity_score>=40?'#78350f30;color:#fbbf24':'#33415530;color:#94a3b8'}">종합 인기도: ${c.popularity_score || 0}점</div>
+        <div class="iw-row"><a href="${c.place_url}" target="_blank" style="color:#2563eb">카카오맵에서 보기</a> ${c.camfit_review_count ? `| <a href="reviews.html" target="_blank" style="color:#ff6b35">캠핏 리뷰 ${c.camfit_review_count}개 보기</a>` : ''}</div>
+      </div>`;
+      infowindow.setContent(content);
+      infowindow.open(map, marker);
+    });
+    markers.push(marker);
+  });
+}
+
+// ============ POPULARITY CIRCLES ============
+function togglePopularity() {
+  popVisible = !popVisible;
+  const btn = document.getElementById('pop-toggle');
+  const legend = document.getElementById('pop-legend');
+
+  if (popVisible) {
+    btn.textContent = '인기도 원 OFF';
+    btn.classList.add('active');
+    legend.classList.add('show');
+
+    if (popCircles.length === 0) {
+      const maxScore = Math.max(...CAMPS_DATA.map(c => c.popularity_score || 0));
+
+      CAMPS_DATA.forEach(c => {
+        const score = c.popularity_score || 0;
+        const isVip = c.name === VIP_NAME;
+        const radius = 80 + (score / Math.max(maxScore, 1)) * 500;
+
+        let fillColor, strokeColor;
+        if (isVip) { fillColor = '#f59e0b'; strokeColor = '#f59e0b'; }
+        else if (score >= 70) { fillColor = '#ef4444'; strokeColor = '#ef4444'; }
+        else if (score >= 40) { fillColor = '#fbbf24'; strokeColor = '#fbbf24'; }
+        else if (score >= 20) { fillColor = '#38bdf8'; strokeColor = '#38bdf8'; }
+        else { fillColor = '#64748b'; strokeColor = '#64748b'; }
+
+        const circle = new kakao.maps.Circle({
+          map: map,
+          center: new kakao.maps.LatLng(c.lat, c.lng),
+          radius: radius,
+          strokeWeight: isVip ? 3 : 1,
+          strokeColor: strokeColor,
+          strokeOpacity: isVip ? 0.9 : 0.5,
+          strokeStyle: isVip ? 'solid' : 'dashed',
+          fillColor: fillColor,
+          fillOpacity: isVip ? 0.3 : 0.15 + (score / maxScore) * 0.2,
+        });
+        popCircles.push(circle);
+
+        const label = new kakao.maps.CustomOverlay({
+          map: map,
+          position: new kakao.maps.LatLng(c.lat, c.lng),
+          content: `<div style="background:${fillColor}dd;color:#fff;padding:2px 6px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap;${isVip?'border:2px solid #fff;font-size:12px;padding:3px 8px;':''}">${score}${isVip?' VIP':''}</div>`,
+          yAnchor: 0.5,
+          zIndex: isVip ? 100 : 1,
+        });
+        popLabels.push(label);
+      });
+    }
+  } else {
+    btn.textContent = '인기도 원 ON';
+    btn.classList.remove('active');
+    legend.classList.remove('show');
+  }
+
+  popCircles.forEach(c => c.setMap(popVisible ? map : null));
+  popLabels.forEach(l => l.setMap(popVisible ? map : null));
+}
+
+function filterMarkers(filter) {
+  markers.forEach(m => {
+    const c = m.campData;
+    let show = true;
+    if (filter === 'near') show = c.distance_km <= 2;
+    else if (filter === 'mid') show = c.distance_km > 2 && c.distance_km <= 4;
+    else if (filter === 'far') show = c.distance_km > 4;
+    else if (filter === 'high') show = (c.rating || 0) >= 4;
+    m.setVisible(show);
+  });
+}
+
+// ============ SIDEBAR ============
+function initSidebar() {
+  renderList(CAMPS_DATA);
+
+  document.getElementById('search-input').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    renderList(CAMPS_DATA.filter(c => c.name.toLowerCase().includes(q) || (c.address||'').toLowerCase().includes(q)));
+  });
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      filterMarkers(currentFilter);
+      let filtered = CAMPS_DATA;
+      if (currentFilter === 'near') filtered = CAMPS_DATA.filter(c => c.distance_km <= 2);
+      else if (currentFilter === 'mid') filtered = CAMPS_DATA.filter(c => c.distance_km > 2 && c.distance_km <= 4);
+      else if (currentFilter === 'far') filtered = CAMPS_DATA.filter(c => c.distance_km > 4);
+      else if (currentFilter === 'high') filtered = CAMPS_DATA.filter(c => (c.rating||0) >= 4);
+      renderList(filtered);
+    });
+  });
+}
+
+function renderList(camps) {
+  const ul = document.getElementById('camp-list');
+  ul.innerHTML = camps.map((c, i) => {
+    const nv = c.naver_visitor_review || 0;
+    const nb = c.naver_blog_review || 0;
+    return `
+    <li class="camp-item ${c.name === VIP_NAME ? 'vip' : ''}" data-idx="${CAMPS_DATA.indexOf(c)}">
+      <div class="name">${c.name}</div>
+      <div class="meta">
+        <span class="rating"><span class="source-badge kakao">카카오</span> ★${c.rating || '-'} (${c.review_count || 0})</span>
+        <span class="naver"><span class="source-badge naver">네이버</span> ${c.naver_rating ? '★'+c.naver_rating+' ' : ''}방문${nv} 블로그${nb}</span>
+        ${c.camfit_review_count ? `<span style="color:#ff6b35"><span class="source-badge" style="background:#ff6b3530;color:#ff6b35">캠핏</span> ${c.camfit_review_count}</span>` : ''}
+        <span>${c.distance_km}km</span>
+        <span style="color:${(c.popularity_score||0)>=70?'#f87171':(c.popularity_score||0)>=40?'#fbbf24':'#64748b'};font-weight:600">인기${c.popularity_score||0}</span>
+        ${c.has_own_website ? '<span style="color:#a78bfa;font-size:10px">자체사이트</span>' : ''}
+        ${(c.booking_platforms||[]).length ? '<span style="color:#64748b;font-size:10px">'+c.booking_platforms.join(',')+'</span>' : ''}
+      </div>
+    </li>`;
+  }).join('');
+
+  ul.querySelectorAll('.camp-item').forEach(li => {
+    li.addEventListener('click', () => {
+      const idx = parseInt(li.dataset.idx);
+      const m = markers[idx];
+      map.setCenter(m.getPosition());
+      map.setLevel(4);
+      kakao.maps.event.trigger(m, 'click');
+      document.querySelector('.tab[data-tab="tab-map"]').click();
+    });
+  });
+}
+
+// ============ POSITIONING CHARTS ============
+function initPositioning() {
+  const vipColor = '#f59e0b';
+  const normalColor = '#38bdf8';
+
+  // 1) Rating vs Distance scatter
+  new Chart(document.getElementById('chart-rating-dist'), {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: '경쟁 캠핑장',
+        data: CAMPS_DATA.filter(c => c.name !== VIP_NAME).map(c => ({ x: c.distance_km, y: c.rating || 0, name: c.name })),
+        backgroundColor: normalColor + '80',
+        borderColor: normalColor, pointRadius: 6
+      }, {
+        label: 'VIP캠핑장',
+        data: CAMPS_DATA.filter(c => c.name === VIP_NAME).map(c => ({ x: c.distance_km, y: c.rating || 0 })),
+        backgroundColor: vipColor, borderColor: vipColor,
+        pointRadius: 12, pointStyle: 'star'
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { x: { title: { display:true, text:'거리(km)', color:'#94a3b8' }, ticks:{color:'#94a3b8'}, grid:{color:'#33415544'} },
+                y: { title: { display:true, text:'평점', color:'#94a3b8' }, min:0, max:5.2, ticks:{color:'#94a3b8'}, grid:{color:'#33415544'} } },
+      plugins: {
+        tooltip: { callbacks: { label: ctx => `${ctx.raw.name || 'VIP캠핑장'}: ★${ctx.raw.y} (${ctx.raw.x}km)` } },
+        legend: { labels: { color:'#94a3b8' } }
+      }
+    }
+  });
+
+  // 2) Review count vs Rating bubble
+  new Chart(document.getElementById('chart-review-rating'), {
+    type: 'bubble',
+    data: {
+      datasets: [{
+        label: '경쟁 캠핑장',
+        data: CAMPS_DATA.filter(c => c.name !== VIP_NAME).map(c => ({ x: c.rating||0, y: c.review_count||0, r: Math.max(4, Math.sqrt(c.review_count||1)*3), name: c.name })),
+        backgroundColor: normalColor + '60', borderColor: normalColor
+      }, {
+        label: 'VIP캠핑장',
+        data: CAMPS_DATA.filter(c => c.name === VIP_NAME).map(c => ({ x: c.rating||0, y: c.review_count||0, r: 14 })),
+        backgroundColor: vipColor + '90', borderColor: vipColor
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { x: { title:{display:true,text:'평점',color:'#94a3b8'}, min:0, max:5.2, ticks:{color:'#94a3b8'}, grid:{color:'#33415544'} },
+                y: { title:{display:true,text:'리뷰수',color:'#94a3b8'}, ticks:{color:'#94a3b8'}, grid:{color:'#33415544'} } },
+      plugins: {
+        tooltip: { callbacks: { label: ctx => `${ctx.raw.name || 'VIP'}: ★${ctx.raw.x} / ${ctx.raw.y}리뷰` } },
+        legend: { labels:{color:'#94a3b8'} }
+      }
+    }
+  });
+
+  // 3) Distance distribution bar
+  const distBins = [
+    { label:'0~1km', camps: CAMPS_DATA.filter(c=>c.distance_km<=1) },
+    { label:'1~2km', camps: CAMPS_DATA.filter(c=>c.distance_km>1&&c.distance_km<=2) },
+    { label:'2~3km', camps: CAMPS_DATA.filter(c=>c.distance_km>2&&c.distance_km<=3) },
+    { label:'3~4km', camps: CAMPS_DATA.filter(c=>c.distance_km>3&&c.distance_km<=4) },
+    { label:'4~5km', camps: CAMPS_DATA.filter(c=>c.distance_km>4) }
+  ];
+  new Chart(document.getElementById('chart-dist-box'), {
+    type: 'bar',
+    data: {
+      labels: distBins.map(b => b.label),
+      datasets: [{
+        label: '캠핑장 수',
+        data: distBins.map(b => b.camps.length),
+        backgroundColor: '#38bdf880', borderColor: '#38bdf8', borderWidth: 1
+      }, {
+        label: '평균 평점',
+        data: distBins.map(b => {
+          const r = b.camps.filter(c=>c.rating).map(c=>c.rating);
+          return r.length ? +(r.reduce((a,b)=>a+b,0)/r.length).toFixed(1) : 0;
+        }),
+        type: 'line', borderColor: '#fbbf24', backgroundColor: '#fbbf2440',
+        yAxisID: 'y1', pointRadius: 5, tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { ticks:{color:'#94a3b8'}, grid:{color:'#33415544'} },
+        y: { title:{display:true,text:'개수',color:'#94a3b8'}, ticks:{color:'#94a3b8'}, grid:{color:'#33415544'} },
+        y1: { position:'right', title:{display:true,text:'평점',color:'#fbbf24'}, min:0, max:5, ticks:{color:'#fbbf24'}, grid:{display:false} }
+      },
+      plugins: { legend:{labels:{color:'#94a3b8'}} }
+    }
+  });
+
+  // 4) Competitiveness matrix
+  const quadrants = [
+    { label:'위협(높은평점+많은리뷰)', camps: CAMPS_DATA.filter(c=>(c.rating||0)>=3.5&&(c.review_count||0)>=20), color:'#ef4444' },
+    { label:'성장중(높은평점+적은리뷰)', camps: CAMPS_DATA.filter(c=>(c.rating||0)>=3.5&&(c.review_count||0)<20), color:'#fbbf24' },
+    { label:'약한경쟁(낮은평점+많은리뷰)', camps: CAMPS_DATA.filter(c=>(c.rating||0)<3.5&&(c.review_count||0)>=20), color:'#38bdf8' },
+    { label:'미약(낮은평점+적은리뷰)', camps: CAMPS_DATA.filter(c=>(c.rating||0)<3.5&&(c.review_count||0)<20), color:'#64748b' }
+  ];
+  new Chart(document.getElementById('chart-matrix'), {
+    type: 'doughnut',
+    data: {
+      labels: quadrants.map(q => `${q.label} (${q.camps.length})`),
+      datasets: [{ data: quadrants.map(q => q.camps.length), backgroundColor: quadrants.map(q => q.color+'cc') }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position:'bottom', labels:{color:'#94a3b8', font:{size:11}} } }
+    }
+  });
+}
+
+// ============ HEATMAP ============
+function initHeatmap() {
+  heatmap = new kakao.maps.Map(document.getElementById('heatmap'), {
+    center: new kakao.maps.LatLng(VIP_CENTER.lat, VIP_CENTER.lng), level: 7
+  });
+
+  // Grid-based density
+  const gridSize = 0.008; // ~800m
+  const grid = {};
+  CAMPS_DATA.forEach(c => {
+    const gx = Math.floor(c.lng / gridSize);
+    const gy = Math.floor(c.lat / gridSize);
+    const key = `${gx},${gy}`;
+    if (!grid[key]) grid[key] = { lat: 0, lng: 0, count: 0, camps: [] };
+    grid[key].lat += c.lat;
+    grid[key].lng += c.lng;
+    grid[key].count++;
+    grid[key].camps.push(c.name);
+  });
+
+  const maxCount = Math.max(...Object.values(grid).map(g => g.count));
+  document.getElementById('heat-info').textContent = `최대 밀집: ${maxCount}개/셀 | 셀 크기: ~800m`;
+
+  Object.values(grid).forEach(g => {
+    const intensity = g.count / maxCount;
+    const lat = g.lat / g.count;
+    const lng = g.lng / g.count;
+    const r = 200 + intensity * 400;
+
+    let color;
+    if (intensity > 0.7) color = '#ef4444';
+    else if (intensity > 0.4) color = '#fbbf24';
+    else color = '#22d3ee';
+
+    const circle = new kakao.maps.Circle({
+      map: heatmap, center: new kakao.maps.LatLng(lat, lng),
+      radius: r, strokeWeight: 0,
+      fillColor: color, fillOpacity: 0.25 + intensity * 0.35
+    });
+
+    const overlay = new kakao.maps.CustomOverlay({
+      map: heatmap, position: new kakao.maps.LatLng(lat, lng),
+      content: `<div style="background:${color}dd;color:#fff;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700">${g.count}</div>`,
+      yAnchor: 0.5
+    });
+  });
+
+  // VIP marker
+  new kakao.maps.Marker({
+    map: heatmap,
+    position: new kakao.maps.LatLng(VIP_CENTER.lat, VIP_CENTER.lng),
+    image: new kakao.maps.MarkerImage(
+      'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
+      new kakao.maps.Size(24, 35)
+    )
+  });
+
+  // Distance circles
+  [1, 2, 3, 5].forEach(r => {
+    new kakao.maps.Circle({
+      map: heatmap, center: new kakao.maps.LatLng(VIP_CENTER.lat, VIP_CENTER.lng),
+      radius: r * 1000, strokeWeight: 1, strokeColor: '#f59e0b', strokeOpacity: 0.4,
+      strokeStyle: 'dash', fillOpacity: 0
+    });
+  });
+}
+
+// ============ SENTIMENT ANALYSIS ============
+function initSentiment() {
+  const posKeywords = ['좋아요','깨끗','친절','넓','뷰','경치','조용','쾌적','추천','최고','만족','편리','맛있','즐거','아이','가족','편안','분위기','자연','시설'];
+  const negKeywords = ['별로','더러','불친절','좁','시끄','불편','비싸','냄새','벌레','모기','불만','최악','실망','노후','낡','더럽','위험','차갑','부족','관리'];
+
+  // Build per-camp sentiment from review data
+  const reviewMap = {};
+  REVIEWS_DATA.forEach(r => { reviewMap[r.kakao_id] = r; });
+
+  const campSentiments = CAMPS_DATA.map(camp => {
+    const rating = camp.rating || 0;
+    const reviewCount = camp.review_count || 0;
+
+    // Simple sentiment based on rating
+    let sentiment = 'neutral';
+    if (rating >= 4.0) sentiment = 'positive';
+    else if (rating <= 2.5) sentiment = 'negative';
+
+    return { ...camp, sentiment, reviewCount };
+  });
+
+  // Summary cards
+  const posCount = campSentiments.filter(c => c.sentiment === 'positive').length;
+  const negCount = campSentiments.filter(c => c.sentiment === 'negative').length;
+  const neuCount = campSentiments.length - posCount - negCount;
+  const totalReviews = CAMPS_DATA.reduce((s,c) => s + (c.review_count||0), 0);
+  const vip = CAMPS_DATA.find(c => c.name === VIP_NAME);
+
+  const totalNaverVisitor = CAMPS_DATA.reduce((s,c) => s + (c.naver_visitor_review||0), 0);
+  const totalNaverBlog = CAMPS_DATA.reduce((s,c) => s + (c.naver_blog_review||0), 0);
+  const vipNV = vip?.naver_visitor_review || 0;
+  const vipNB = vip?.naver_blog_review || 0;
+
+  document.getElementById('sent-summary').innerHTML = `
+    <div class="summary-card"><h4><span class="source-badge kakao">카카오</span> 전체 리뷰 수</h4><div class="value" style="color:#38bdf8">${totalReviews}</div></div>
+    <div class="summary-card"><h4><span class="source-badge naver">네이버</span> 방문자/블로그 리뷰</h4><div class="value" style="color:#2db400">${totalNaverVisitor} / ${totalNaverBlog}</div></div>
+    <div class="summary-card"><h4>긍정 캠핑장 (카카오 4.0+)</h4><div class="value good">${posCount}개</div></div>
+    <div class="summary-card"><h4>VIP캠핑장</h4><div class="value bad">카카오 ★${vip?.rating || '-'}<br><span style="font-size:16px;color:#2db400">네이버 방문${vipNV} 블로그${vipNB}</span></div></div>
+  `;
+
+  // Sentiment distribution
+  const grid = document.getElementById('sent-grid');
+
+  // Card 1: Overall sentiment bar
+  let html = `<div class="sent-card"><h3>전체 감성 분포</h3>
+    <div class="sent-bar">
+      <div class="pos-fill" style="width:${(posCount/CAMPS_DATA.length*100).toFixed(1)}%"></div>
+      <div class="neu-fill" style="width:${(neuCount/CAMPS_DATA.length*100).toFixed(1)}%"></div>
+      <div class="neg-fill" style="width:${(negCount/CAMPS_DATA.length*100).toFixed(1)}%"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#94a3b8">
+      <span style="color:#34d399">긍정 ${posCount}개 (${(posCount/CAMPS_DATA.length*100).toFixed(0)}%)</span>
+      <span>중립 ${neuCount}개</span>
+      <span style="color:#f87171">부정 ${negCount}개 (${(negCount/CAMPS_DATA.length*100).toFixed(0)}%)</span>
+    </div>
+  </div>`;
+
+  // Card 2: Keyword cloud
+  html += `<div class="sent-card"><h3>감성 키워드 사전</h3>
+    <p style="font-size:11px;color:#64748b;margin-bottom:10px">캠핑장 리뷰에서 자주 등장하는 긍정/부정 키워드</p>
+    <div class="keyword-cloud">
+      ${posKeywords.map(k => `<span class="keyword pos">${k}</span>`).join('')}
+      ${negKeywords.map(k => `<span class="keyword neg">${k}</span>`).join('')}
+    </div>
+  </div>`;
+
+  // Card 2.5: 잘나가는 캠핑장 성공 요인 가이드라인
+  html += `<div class="sent-card" style="grid-column:1/-1">
+    <h3 style="color:#34d399">잘나가는 캠핑장의 5가지 핵심 성공 포인트</h3>
+    <p style="font-size:11px;color:#64748b;margin-bottom:12px">반경 5km 내 인기도 TOP 10 캠핑장을 분석한 결과, 공통된 성공 패턴이 있습니다. (평균 평점 4.3 / 평균 블로그 239개)</p>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">
+      <div style="background:#065f4625;border-radius:10px;padding:14px;border-top:3px solid #34d399">
+        <div style="font-size:28px;font-weight:800;color:#34d399;margin-bottom:4px">1</div>
+        <div style="font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:6px">그늘·자연환경</div>
+        <div style="font-size:11px;color:#94a3b8;line-height:1.6">TOP 캠핑장 대부분 나무숲, 계곡, 산 조망 보유. <strong style="color:#34d399">뙤약볕 불만 0건</strong>. 자연 그늘이 없으면 차양 구조물이라도 필수. VIP의 가장 큰 약점이 바로 이것.</div>
+      </div>
+      <div style="background:#1e3a5f25;border-radius:10px;padding:14px;border-top:3px solid #3b82f6">
+        <div style="font-size:28px;font-weight:800;color:#3b82f6;margin-bottom:4px">2</div>
+        <div style="font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:6px">블로그 마케팅</div>
+        <div style="font-size:11px;color:#94a3b8;line-height:1.6">TOP 10 평균 블로그 리뷰 <strong style="color:#3b82f6">239개</strong>. 1위 양주르는 1,004개. 체험단·협찬 블로그가 검색 노출과 신규 유입의 핵심 엔진. 블로그 없으면 존재감 제로.</div>
+      </div>
+      <div style="background:#78350f25;border-radius:10px;padding:14px;border-top:3px solid #f59e0b">
+        <div style="font-size:28px;font-weight:800;color:#f59e0b;margin-bottom:4px">3</div>
+        <div style="font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:6px">리뷰 수 확보</div>
+        <div style="font-size:11px;color:#94a3b8;line-height:1.6">평점 5.0이어도 리뷰 1개면 신뢰도 0. 카카오 <strong style="color:#f59e0b">15개 이상</strong>, 캠핏 <strong style="color:#f59e0b">30개 이상</strong>이 신뢰 구간. 리뷰 이벤트(할인·굿즈)로 의도적 확보 필요.</div>
+      </div>
+      <div style="background:#3b076425;border-radius:10px;padding:14px;border-top:3px solid #a78bfa">
+        <div style="font-size:28px;font-weight:800;color:#a78bfa;margin-bottom:4px">4</div>
+        <div style="font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:6px">시설 차별화</div>
+        <div style="font-size:11px;color:#94a3b8;line-height:1.6">글램핑·카라반 캠핑장이 TOP에 <strong style="color:#a78bfa">30%</strong>. 일반 오토캠핑은 차별화 어려워 가격 경쟁에 빠짐. 수영장·놀이시설·뷰 등 <strong style="color:#a78bfa">"찍을 거리"</strong>가 인스타·블로그 확산의 핵심.</div>
+      </div>
+      <div style="background:#7f1d1d25;border-radius:10px;padding:14px;border-top:3px solid #f87171">
+        <div style="font-size:28px;font-weight:800;color:#f87171;margin-bottom:4px">5</div>
+        <div style="font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:6px">부정 리뷰 제로</div>
+        <div style="font-size:11px;color:#94a3b8;line-height:1.6">TOP 캠핑장은 <strong style="color:#f87171">소음·위생·불친절 불만 거의 없음</strong>. 부정 리뷰 1개가 긍정 10개보다 강력. 매너타임 안내, 청결 관리, 친절 응대 — 기본기가 곧 경쟁력.</div>
+      </div>
+    </div>
+    <div style="margin-top:12px;padding:10px 14px;background:#f59e0b10;border-radius:8px;border:1px dashed #f59e0b40">
+      <div style="font-size:12px;color:#f59e0b;font-weight:600">VIP캠핑장 적용 우선순위</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px;line-height:1.7">
+        <strong style="color:#f87171">즉시</strong>: 그늘막/차양 설치 + 빌라 소음 안내문 → 부정 리뷰 원인 차단<br>
+        <strong style="color:#fbbf24">1개월</strong>: 카카오+캠핏 리뷰 이벤트 시작 (재방문 할인, 리뷰 작성 시 음료 제공 등)<br>
+        <strong style="color:#34d399">3개월</strong>: 블로그 체험단 월 5건 이상 → 검색 노출 확보 → 자연 유입 증가
+      </div>
+    </div>
+  </div>`;
+
+  // Card 3: 종합순위 TOP 10
+  const topRanked = [...CAMPS_DATA].sort((a,b) => (b.popularity_score||0)-(a.popularity_score||0)).slice(0, 10);
+  html += `<div class="sent-card"><h3>종합순위 TOP 10</h3>
+    <p style="font-size:11px;color:#64748b;margin-bottom:6px;line-height:1.5">
+      <strong style="color:#94a3b8">종합순위 선정 기준 (100점 만점)</strong><br>
+      <span style="color:#fbbf24">카카오 평점(20)</span> + <span style="color:#fbbf24">카카오 리뷰수(15)</span> + <span style="color:#2db400">네이버 방문자리뷰(20)</span> + <span style="color:#2db400">네이버 블로그(15)</span> + <span style="color:#2db400">네이버 평점(10)</span> + <span style="color:#ff6b35">캠핏 리뷰(15)</span> + <span style="color:#a78bfa">예약채널(5)</span><br>
+      <span style="color:#64748b">평점만이 아닌, 리뷰 양·플랫폼 다각화·마케팅 활동까지 반영한 실질적 경쟁력 지표. openub 카드매출 데이터 확보 시 추가 반영 예정.</span>
+    </p>
+    <div style="display:grid;grid-template-columns:30px 1fr 50px;gap:4px 10px;align-items:center;margin-top:8px;font-size:12px">
+      <div style="color:#64748b;font-weight:600">순위</div><div style="color:#64748b;font-weight:600">캠핑장</div><div style="color:#64748b;font-weight:600;text-align:right">점수</div>
+    ${topRanked.map((c,i) => {
+      const d = c.score_detail || {};
+      const isVip = c.name === VIP_NAME;
+      const medal = i===0?'1st':i===1?'2nd':i===2?'3rd':'';
+      const bg = isVip ? 'background:#f59e0b15;border-radius:6px;padding:4px 6px;border-left:3px solid #f59e0b;' : '';
+      const cnv = c.naver_visitor_review||0, cnb = c.naver_blog_review||0;
+      return \`<div style="font-size:16px;font-weight:700;color:\${i<3?'#f59e0b':'#94a3b8'};text-align:center">\${medal || (i+1)}</div>
+        <div style="\${bg}">
+          <span style="font-weight:600;color:\${isVip?'#f59e0b':'#f1f5f9'}">\${c.name}\${isVip?' (OUR)':''}</span>
+          <div style="font-size:10px;color:#64748b;margin-top:2px">
+            <span style="color:#fbbf24">카카오★\${c.rating||'-'}(\${c.review_count||0})</span>
+            <span style="color:#2db400;margin-left:6px">네이버 방문\${cnv} 블로그\${cnb}</span>
+            \${c.camfit_review_count ? '<span style="color:#ff6b35;margin-left:6px">캠핏'+c.camfit_review_count+'</span>' : ''}
+            \${c.has_own_website ? '<span style="color:#a78bfa;margin-left:6px">자체사이트</span>' : ''}
+          </div>
+          <div style="display:flex;gap:3px;margin-top:3px">
+            <span style="background:#fbbf2425;color:#fbbf24;padding:1px 4px;border-radius:3px;font-size:9px">카평\${d.kakao_rating||0}</span>
+            <span style="background:#fbbf2425;color:#fbbf24;padding:1px 4px;border-radius:3px;font-size:9px">카리\${d.kakao_review||0}</span>
+            <span style="background:#2db40025;color:#2db400;padding:1px 4px;border-radius:3px;font-size:9px">네방\${d.naver_visitor||0}</span>
+            <span style="background:#2db40025;color:#2db400;padding:1px 4px;border-radius:3px;font-size:9px">네블\${d.naver_blog||0}</span>
+            \${d.naver_rating ? '<span style="background:#2db40025;color:#2db400;padding:1px 4px;border-radius:3px;font-size:9px">네평'+d.naver_rating+'</span>' : ''}
+            <span style="background:#ff6b3525;color:#ff6b35;padding:1px 4px;border-radius:3px;font-size:9px">캠핏\${d.camfit_review||0}</span>
+            \${d.channel ? '<span style="background:#a78bfa25;color:#a78bfa;padding:1px 4px;border-radius:3px;font-size:9px">채널'+d.channel+'</span>' : ''}
+          </div>
+        </div>
+        <div style="font-size:18px;font-weight:800;color:\${c.popularity_score>=60?'#f87171':c.popularity_score>=40?'#fbbf24':'#64748b'};text-align:right">\${c.popularity_score}</div>\`;
+    }).join('')}
+    </div>
+    <div style="margin-top:12px;padding:10px 14px;background:#1e40af15;border-radius:8px;border-left:3px solid #3b82f6">
+      <div style="font-size:12px;color:#60a5fa;font-weight:600;margin-bottom:4px">종합순위가 말해주는 것</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.7">
+        <strong style="color:#cbd5e1">평점만 높으면 부족</strong> — 리뷰 1개 5.0점보다 리뷰 529개 4.2점(양주송천)이 종합 1위. 실질적 경쟁력은 '양'이 만든다.<br>
+        <strong style="color:#cbd5e1">블로그가 핵심 무기</strong> — TOP 3 모두 블로그 100개 이상. 블로그 없으면 네이버 검색 유입 제로.<br>
+        <strong style="color:#cbd5e1">캠핏 리뷰가 반전 카드</strong> — VIP는 카카오 평점은 최하위지만, 캠핏 47개 리뷰 덕에 종합 9위까지 올라옴. 캠핏 사용자 만족도는 나쁘지 않다는 뜻.<br>
+        <strong style="color:#cbd5e1">VIP 목표</strong> — 그늘막+리뷰 이벤트+블로그 체험단 → 카카오 4.0+ 회복 시 종합 TOP 5 진입 가능.
+      </div>
+    </div>
+  </div>`;
+
+  // Card 4: 종합순위 하위 8
+  const worstRated = [...CAMPS_DATA].sort((a,b) => (a.popularity_score||0)-(b.popularity_score||0)).slice(0, 8);
+  html += `<div class="sent-card"><h3>종합순위 하위 8</h3>
+    <p style="font-size:11px;color:#64748b;margin-bottom:8px;line-height:1.5">기준: <strong style="color:#94a3b8">종합순위 점수</strong> 낮은 순. 평점·리뷰·블로그·캠핏·예약채널 모두 부족한 곳. 리뷰 수 자체가 적어 존재감이 없거나, 관리가 안 되는 캠핑장.</p>
+    ${worstRated.map(c => {
+      const cls = c.rating >= 4 ? 'high' : c.rating >= 3 ? 'mid' : 'low';
+      const isVip = c.name === VIP_NAME;
+      const cnv = c.naver_visitor_review||0, cnb = c.naver_blog_review||0;
+      // 왜 못 올라가는지 분석
+      let why2 = '';
+      if (isVip) why2 = '<span style="color:#f59e0b;font-size:10px"> | 뙤약볕+빌라 소음 민원 → 구조적 문제. 시설 투자 없이는 회복 불가</span>';
+      else if (c.review_count >= 8 && c.rating <= 2.0) why2 = '<span style="color:#f87171;font-size:10px"> | 리뷰 다수+저평점 → 반복적 불만. 시설 노후·서비스 부재 고착화</span>';
+      else if (c.review_count <= 3) why2 = '<span style="color:#64748b;font-size:10px"> | 소수 부정 리뷰에 평점 추락. 긍정 리뷰 확보 시 반등 가능성 있음</span>';
+      else why2 = '<span style="color:#fbbf24;font-size:10px"> | 중간 리뷰수에 저평점 → 일부 개선으로 3.5+ 회복 가능</span>';
+      return `<div class="review-item" style="${isVip?'background:#f59e0b15;border-radius:6px;padding:10px':''}"><span class="camp-name">${c.name}${isVip?' OUR':''}</span><span class="score ${cls}"><span class="source-badge kakao">카카오</span> ★${c.rating}</span>${why2}<br><span style="font-size:11px;color:#64748b">${c.distance_km}km | 카카오 리뷰 ${c.review_count}개</span><br><span style="font-size:11px;color:#2db400">네이버 ${c.naver_rating ? '★'+c.naver_rating+' | ' : ''}방문자 ${cnv} | 블로그 ${cnb}</span></div>`;
+    }).join('')}
+    <div style="margin-top:12px;padding:10px 14px;background:#7f1d1d15;border-radius:8px;border-left:3px solid #ef4444">
+      <div style="font-size:12px;color:#f87171;font-weight:600;margin-bottom:4px">왜 이 수준에서 벗어나기 어려운가?</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.7">
+        <strong style="color:#cbd5e1">1. 구조적 문제</strong> — VIP(뙤약볕·빌라 민원), 산막골(개미), 대궐(시설 노후) 등 시설 투자 없이 리뷰만으로 해결 불가능한 물리적 문제.<br>
+        <strong style="color:#cbd5e1">2. 부정 리뷰의 지속력</strong> — 카카오맵 리뷰는 삭제 불가. 부정 리뷰 1개가 평점에 미치는 영향이 리뷰 적은 곳일수록 치명적 (3건 중 1건 = 33%).<br>
+        <strong style="color:#cbd5e1">3. 악순환</strong> — 저평점 → 검색 노출 하락 → 방문객 감소 → 리뷰 없음 → 평점 고착. 의도적 리뷰 이벤트 없이는 자연 회복 거의 불가.<br>
+        <strong style="color:#cbd5e1">4. 탈출 전략</strong> — (1) 물리적 문제 먼저 해결 (2) 개선 후 재방문 유도 (3) 카카오+네이버 리뷰 동시 확보 (4) 블로그 체험단으로 인지도 회복.
+      </div>
+    </div>
+  </div>`;
+
+  // Card 5: VIP 최하위 원인 분석
+  html += `<div class="sent-card" style="grid-column:1/-1"><h3>VIP캠핑장 최하위 원인 분석</h3>
+    <p style="font-size:11px;color:#64748b;margin-bottom:12px">카카오맵 실제 방문자 리뷰 3건을 분석한 결과, 반복되는 불만 키워드가 명확합니다.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:15px">
+      <div style="background:#7f1d1d25;border-radius:8px;padding:15px;border-left:3px solid #ef4444">
+        <div style="font-size:13px;color:#f87171;font-weight:600;margin-bottom:8px">핵심 불만 사항 (카카오맵 리뷰 원문)</div>
+        <div style="font-size:11px;color:#fca5a5;line-height:1.8">
+          <div style="margin:6px 0;padding:8px;background:#7f1d1d20;border-radius:6px">
+            <strong>1. 뙤약볕 (그늘 없음)</strong><br>
+            <span style="color:#94a3b8">"나무가 없어서 해만 뜨면 뙤약볕" "오전 10시~오후 5시 엄청난 뙤약볕" — 3건 중 3건 모두 언급</span>
+          </div>
+          <div style="margin:6px 0;padding:8px;background:#7f1d1d20;border-radius:6px">
+            <strong>2. 빌라 인접 소음 민원</strong><br>
+            <span style="color:#94a3b8">"빌라가 있어 연기 민원" "저녁 8시에 떠든다고 경찰 왔어요" "대화도 크게 할 수 없고" — 2건 언급</span>
+          </div>
+          <div style="margin:6px 0;padding:8px;background:#7f1d1d20;border-radius:6px">
+            <strong>3. 캠핑 분위기 부재</strong><br>
+            <span style="color:#94a3b8">"캠핑이 아니라 군인들 야외 적응훈련" "뭔가 얘기도 하고 즐기길 원한다면 여긴 피하세요" — 종합 불만</span>
+          </div>
+        </div>
+      </div>
+      <div style="background:#065f4625;border-radius:8px;padding:15px;border-left:3px solid #34d399">
+        <div style="font-size:13px;color:#34d399;font-weight:600;margin-bottom:8px">반면, 블로그 리뷰는 긍정적 (네이버 블로그 ${vipNB}개)</div>
+        <div style="font-size:11px;color:#86efac;line-height:1.8">
+          <div style="margin:6px 0;padding:8px;background:#065f4620;border-radius:6px">
+            <span style="color:#94a3b8">"관리가 잘 되고 접근성이 좋은 곳" "깨끗한 시설" "계곡물이 흐르고 있어 물놀이 최적"</span>
+          </div>
+          <div style="margin:6px 0;padding:8px;background:#065f4620;border-radius:6px">
+            <span style="color:#94a3b8">블로그는 대부분 협찬/체험단 리뷰로 긍정 편향. 실제 방문자 평가(카카오)와 온도차가 큼.</span>
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:12px;color:#fbbf24;font-weight:600">현재 상태</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:4px">
+          <span class="source-badge kakao">카카오</span> ★${vip?.rating} (${vip?.review_count}건) — 실사용자 평가 최하위<br>
+          <span class="source-badge naver">네이버</span> 방문자 ${vipNV} / 블로그 ${vipNB} — 블로그 마케팅은 활발<br>
+          <strong style="color:#f87171">결론: 블로그 마케팅은 하고 있으나, 실제 방문 경험이 기대에 못 미침</strong>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:15px">
+      <div style="background:#7f1d1d30;border-radius:8px;padding:15px">
+        <div style="font-size:13px;color:#f87171;font-weight:600">즉시 해결 필요</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:5px;line-height:1.7">
+          1) <strong style="color:#fca5a5">그늘막/차양 설치</strong> — 3건 모두 뙤약볕 불만. 파라솔이나 그늘 구조물 필수<br>
+          2) <strong style="color:#fca5a5">소음 기준 사전 안내</strong> — 빌라 민원 방지를 위한 매너타임 안내문 강화
+        </div>
+      </div>
+      <div style="background:#78350f30;border-radius:8px;padding:15px">
+        <div style="font-size:13px;color:#fbbf24;font-weight:600">리뷰 회복 전략</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:5px;line-height:1.7">
+          1) 시설 개선 후 <strong style="color:#fbbf24">기존 부정 리뷰어 재초대</strong><br>
+          2) 카카오맵 리뷰 이벤트 (현재 3건 → 15건 이상 확보 시 평점 반전 가능)<br>
+          3) 블로그 마케팅 → 카카오/네이버 방문자 리뷰 유도로 전환
+        </div>
+      </div>
+      <div style="background:#065f4630;border-radius:8px;padding:15px">
+        <div style="font-size:13px;color:#34d399;font-weight:600">살릴 수 있는 강점</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:5px;line-height:1.7">
+          - 사이트 ${vip?.site_count || '?'}개 (중대형 규모)<br>
+          - 서울 30분 접근성<br>
+          - 석현천 계곡 바로 앞<br>
+          - 신생 캠핑장 (시설 깨끗)<br>
+          - 근접 경쟁사 평점도 3.3 수준 → 조금만 개선하면 역전 가능
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  grid.innerHTML = html;
+}
+</script>
+</body>
+</html>
