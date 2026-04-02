@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VIP캠핑장 상권분석 대시보드</title>
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=c8fa7a1f109b46c0cf3c7bcbea3623c0&libraries=clusterer"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard','Apple SD Gothic Neo',sans-serif; background:#0f172a; color:#e2e8f0; }
+.header { background:linear-gradient(135deg,#1e293b,#0f172a); padding:20px 30px; border-bottom:1px solid #334155; display:flex; align-items:center; justify-content:space-between; }
+.header h1 { font-size:22px; color:#f8fafc; }
+.header h1 span { color:#f59e0b; }
+.header .stats { display:flex; gap:20px; }
+.stat-box { background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 18px; text-align:center; }
+.stat-box .num { font-size:24px; font-weight:700; color:#38bdf8; }
+.stat-box .label { font-size:11px; color:#94a3b8; margin-top:2px; }
+
+.tabs { display:flex; background:#1e293b; border-bottom:1px solid #334155; padding:0 20px; }
+.tab { padding:12px 24px; cursor:pointer; font-size:14px; color:#94a3b8; border-bottom:2px solid transparent; transition:all .2s; }
+.tab:hover { color:#e2e8f0; }
+.tab.active { color:#38bdf8; border-bottom-color:#38bdf8; }
+
+.panel { display:none; height:calc(100vh - 130px); }
+.panel.active { display:flex; }
+
+/* Tab 1: Map */
+#tab-map { flex-direction:row; }
+#map-container { flex:1; position:relative; }
+#map { width:100%; height:100%; }
+.map-sidebar { width:320px; background:#1e293b; overflow-y:auto; border-left:1px solid #334155; }
+.sidebar-header { padding:14px 16px; border-bottom:1px solid #334155; }
+.sidebar-header input { width:100%; padding:8px 12px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e2e8f0; font-size:13px; }
+.camp-list { list-style:none; }
+.camp-item { padding:12px 16px; border-bottom:1px solid #1e293b44; cursor:pointer; transition:background .15s; }
+.camp-item:hover { background:#334155; }
+.camp-item .name { font-size:13px; font-weight:600; color:#f1f5f9; }
+.camp-item .meta { font-size:11px; color:#94a3b8; margin-top:4px; display:flex; gap:8px; flex-wrap:wrap; }
+.camp-item .rating { color:#fbbf24; }
+.camp-item .naver { color:#2db400; }
+.source-badge { display:inline-block; padding:1px 5px; border-radius:3px; font-size:9px; font-weight:600; }
+.source-badge.kakao { background:#fee50040; color:#fbbf24; }
+.source-badge.naver { background:#2db40030; color:#2db400; }
+.camp-item.vip { border-left:3px solid #f59e0b; }
+.filter-row { padding:10px 16px; display:flex; gap:8px; flex-wrap:wrap; }
+.filter-btn { padding:4px 10px; border-radius:12px; border:1px solid #475569; background:transparent; color:#94a3b8; font-size:11px; cursor:pointer; }
+.filter-btn.active { background:#38bdf8; color:#0f172a; border-color:#38bdf8; }
+
+/* Tab 2: Positioning */
+#tab-pos { flex-direction:column; padding:20px; gap:20px; overflow-y:auto; }
+.chart-row { display:flex; gap:20px; flex:1; min-height:400px; }
+.chart-box { flex:1; background:#1e293b; border-radius:12px; padding:20px; border:1px solid #334155; position:relative; }
+.chart-box h3 { font-size:14px; color:#94a3b8; margin-bottom:10px; }
+.guide-box { background:#1e293b; border:1px solid #334155; border-radius:12px; padding:18px 22px; margin-bottom:0; }
+.guide-box h3 { font-size:15px; color:#38bdf8; margin-bottom:10px; }
+.guide-box p { font-size:12px; color:#94a3b8; line-height:1.7; margin:4px 0; }
+.guide-box .guide-item { display:flex; gap:10px; margin:8px 0; align-items:flex-start; }
+.guide-box .guide-num { background:#38bdf820; color:#38bdf8; min-width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
+.guide-box .guide-text { font-size:12px; color:#cbd5e1; line-height:1.6; }
+.guide-box .guide-text strong { color:#f8fafc; }
+.guide-box .tip { background:#f59e0b15; border-left:3px solid #f59e0b; padding:8px 12px; margin-top:10px; border-radius:0 6px 6px 0; font-size:11px; color:#fbbf24; }
+
+/* Tab 3: Heatmap */
+#tab-heat { flex-direction:column; }
+#heatmap { flex:1; }
+.heat-legend { padding:12px 20px; background:#1e293b; display:flex; align-items:center; gap:15px; font-size:12px; }
+.legend-bar { width:200px; height:14px; border-radius:7px; background:linear-gradient(90deg,#22d3ee,#facc15,#ef4444); }
+
+/* Tab 4: Sentiment */
+#tab-sent { flex-direction:column; padding:20px; gap:20px; overflow-y:auto; }
+.sent-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.sent-card { background:#1e293b; border-radius:12px; padding:20px; border:1px solid #334155; }
+.sent-card h3 { font-size:15px; margin-bottom:12px; color:#f1f5f9; }
+.keyword-cloud { display:flex; flex-wrap:wrap; gap:8px; }
+.keyword { padding:4px 12px; border-radius:16px; font-size:12px; }
+.keyword.pos { background:#065f4620; color:#34d399; border:1px solid #34d39940; }
+.keyword.neg { background:#7f1d1d20; color:#f87171; border:1px solid #f8717140; }
+.sent-bar { height:24px; border-radius:12px; overflow:hidden; display:flex; margin:8px 0; }
+.sent-bar .pos-fill { background:#34d399; }
+.sent-bar .neg-fill { background:#f87171; }
+.sent-bar .neu-fill { background:#64748b; }
+.review-item { padding:10px 0; border-bottom:1px solid #33415544; font-size:13px; }
+.review-item .camp-name { color:#38bdf8; font-weight:600; }
+.review-item .score { padding:2px 8px; border-radius:10px; font-size:11px; margin-left:8px; }
+.review-item .score.high { background:#065f4620; color:#34d399; }
+.review-item .score.mid { background:#78350f20; color:#fbbf24; }
+.review-item .score.low { background:#7f1d1d20; color:#f87171; }
+
+.summary-row { display:flex; gap:20px; }
+.summary-card { flex:1; background:#1e293b; border-radius:12px; padding:18px; border:1px solid #334155; }
+.summary-card h4 { font-size:12px; color:#94a3b8; margin-bottom:6px; }
+.summary-card .value { font-size:28px; font-weight:700; }
+.summary-card .value.good { color:#34d399; }
+.summary-card .value.warn { color:#fbbf24; }
+.summary-card .value.bad { color:#f87171; }
+
+/* Info window */
+.info-window { padding:10px; min-width:220px; font-family:'Apple SD Gothic Neo',sans-serif; }
+.info-window .iw-title { font-size:14px; font-weight:700; color:#1e293b; margin-bottom:6px; }
+.info-window .iw-row { font-size:12px; color:#475569; margin:3px 0; }
+.info-window .iw-rating { color:#f59e0b; font-weight:600; }
+.info-window .iw-naver { color:#2db400; font-weight:600; }
+.info-window .iw-vip { background:#f59e0b; color:#fff; padding:1px 6px; border-radius:4px; font-size:10px; }
+.info-window .iw-score { font-size:13px; font-weight:700; margin-top:4px; padding:3px 8px; border-radius:6px; display:inline-block; }
+.pop-toggle { position:absolute; top:10px; right:10px; z-index:10; background:#1e293b; color:#e2e8f0; border:1px solid #475569; padding:6px 12px; border-radius:8px; font-size:12px; cursor:pointer; }
+.pop-toggle.active { background:#38bdf8; color:#0f172a; border-color:#38bdf8; }
+.pop-legend { position:absolute; bottom:10px; left:10px; z-index:10; background:#1e293bee; border-radius:8px; padding:10px 14px; font-size:11px; color:#94a3b8; display:none; }
+.pop-legend.show { display:block; }
+.pop-legend .leg-row { display:flex; align-items:center; gap:8px; margin:3px 0; }
+.pop-legend .leg-circle { border-radius:50%; display:inline-block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>VIP캠핑장</span> 상권분석 대시보드</h1>
+  <div class="stats">
+    <div class="stat-box"><div class="num" id="total-count">0</div><div class="label">총 캠핑장</div></div>
+    <div class="stat-box"><div class="num" id="avg-rating">0</div><div class="label">평균 평점(카카오)</div></div>
+    <div class="stat-box"><div class="num" id="avg-dist">0</div><div class="label">평균 거리(km)</div></div>
+    <div class="stat-box"><div class="num" id="vip-rank">0</div><div class="label">VIP 종합순위</div></div>
+    <div class="stat-box"><div class="num" id="vip-naver">0</div><div class="label">VIP 네이버리뷰</div></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="tab-map">지도</div>
+  <div class="tab" data-tab="tab-pos">포지셔닝 분석</div>
+  <div class="tab" data-tab="tab-heat">경쟁 밀도</div>
+  <div class="tab" data-tab="tab-sent">리뷰 감성분석</div>
+</div>
+
+<div class="panel active" id="tab-map">
+  <div id="map-container">
+    <div id="map"></div>
+    <button class="pop-toggle" id="pop-toggle" onclick="togglePopularity()">인기도 원 ON</button>
+    <div class="pop-legend" id="pop-legend">
+      <div style="font-weight:600;margin-bottom:4px;color:#e2e8f0">종합 인기도 점수</div>
+      <div style="font-size:10px;margin-bottom:6px">카카오 평점(30) + 카카오 리뷰수(20) + 네이버 방문자(25) + 블로그(15) + 네이버 평점(10)</div>
+      <div class="leg-row"><span class="leg-circle" style="width:12px;height:12px;background:#ef444480"></span> 70+ 핫플</div>
+      <div class="leg-row"><span class="leg-circle" style="width:10px;height:10px;background:#fbbf2480"></span> 40~70 인기</div>
+      <div class="leg-row"><span class="leg-circle" style="width:8px;height:8px;background:#38bdf880"></span> 20~40 보통</div>
+      <div class="leg-row"><span class="leg-circle" style="width:6px;height:6px;background:#64748b80"></span> 0~20 저조</div>
+      <div class="leg-row"><span class="leg-circle" style="width:10px;height:10px;background:#f59e0b80;border:2px solid #f59e0b"></span> VIP캠핑장</div>
+    </div>
+  </div>
+  <div class="map-sidebar">
+    <div class="sidebar-header">
+      <input type="text" id="search-input" placeholder="캠핑장 검색...">
+    </div>
+    <div class="filter-row">
+      <button class="filter-btn active" data-filter="all">전체</button>
+      <button class="filter-btn" data-filter="near">2km 이내</button>
+      <button class="filter-btn" data-filter="mid">2~4km</button>
+      <button class="filter-btn" data-filter="far">4km+</button>
+      <button class="filter-btn" data-filter="high">평점4+</button>
+    </div>
+    <ul class="camp-list" id="camp-list"></ul>
+  </div>
+</div>
+
+<div class="panel" id="tab-pos">
+  <div class="guide-box">
+    <h3>포지셔닝 분석 가이드</h3>
+    <p>VIP캠핑장(노란 별)이 경쟁사(파란 점) 사이에서 어디에 위치하는지 한눈에 파악할 수 있습니다. 데이터 출처: 카카오맵 평점/리뷰수</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
+      <div>
+        <div class="guide-item"><span class="guide-num">1</span><span class="guide-text"><strong>평점 vs 거리</strong> — 가까울수록+평점 높을수록 직접 경쟁자. VIP 별표가 위쪽(평점 높음)에 있어야 유리. 아래쪽이면 개선 시급.</span></div>
+        <div class="guide-item"><span class="guide-num">2</span><span class="guide-text"><strong>리뷰수 vs 평점</strong> — 원이 클수록 리뷰가 많아 영향력 큼. 오른쪽 위(고평점+많은리뷰)가 가장 강한 경쟁사.</span></div>
+      </div>
+      <div>
+        <div class="guide-item"><span class="guide-num">3</span><span class="guide-text"><strong>거리별 분포</strong> — 막대: 거리대별 캠핑장 수, 노란선: 평균 평점. 우리 주변에 몇 개가 있고 평점은 어떤지 확인.</span></div>
+        <div class="guide-item"><span class="guide-num">4</span><span class="guide-text"><strong>경쟁력 매트릭스</strong> — 빨간(위협): 평점 높고 리뷰 많음. 회색(미약): 신경 안 써도 됨. VIP는 현재 회색→노란 이동이 목표.</span></div>
+      </div>
+    </div>
+    <div class="tip">TIP: 차트 위에 마우스를 올리면 캠핑장 이름과 상세 수치를 확인할 수 있습니다.</div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box"><h3>평점 vs 거리 포지셔닝</h3><canvas id="chart-rating-dist"></canvas></div>
+    <div class="chart-box"><h3>리뷰수 vs 평점</h3><canvas id="chart-review-rating"></canvas></div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box"><h3>거리별 평점 분포</h3><canvas id="chart-dist-box"></canvas></div>
+    <div class="chart-box"><h3>경쟁력 매트릭스 (리뷰수 x 평점)</h3><canvas id="chart-matrix"></canvas></div>
+  </div>
+</div>
+
+<div class="panel" id="tab-heat">
+  <div id="heatmap" style="flex:1;position:relative">
+    <div style="position:absolute;top:10px;left:10px;z-index:10;background:#1e293bee;border-radius:10px;padding:14px 18px;max-width:340px;border:1px solid #334155">
+      <div style="font-size:14px;font-weight:600;color:#38bdf8;margin-bottom:6px">경쟁 밀도 히트맵 가이드</div>
+      <div style="font-size:11px;color:#cbd5e1;line-height:1.7">
+        <p style="margin:4px 0"><strong style="color:#ef4444">빨간 원</strong> = 캠핑장이 밀집된 구역 (경쟁 치열)</p>
+        <p style="margin:4px 0"><strong style="color:#fbbf24">노란 원</strong> = 중간 밀도 (적당한 경쟁)</p>
+        <p style="margin:4px 0"><strong style="color:#22d3ee">파란 원</strong> = 저밀도 (경쟁 적음)</p>
+        <p style="margin:4px 0"><strong style="color:#f59e0b">별 마커</strong> = VIP캠핑장 위치</p>
+        <p style="margin:4px 0">점선 원 = VIP 기준 1/2/3/5km 반경</p>
+        <p style="margin:8px 0 2px;padding:6px 10px;background:#f59e0b15;border-radius:6px;color:#fbbf24;font-size:10px">
+          <strong>활용법:</strong> VIP 주변이 빨간색이면 차별화 전략 필수. 파란 구역 쪽으로 마케팅 범위를 넓히거나, 밀집 지역에서 경쟁 우위 요소(가격/시설/리뷰)를 확보하세요.
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="heat-legend">
+    <span>경쟁 밀도:</span>
+    <span>낮음</span>
+    <div class="legend-bar"></div>
+    <span>높음</span>
+    <span style="margin-left:20px" id="heat-info"></span>
+    <span style="margin-left:10px;color:#64748b">| 기준: ~800m 격자 내 캠핑장 수</span>
+  </div>
+</div>
+
+<div class="panel" id="tab-sent">
+  <div class="summary-row" id="sent-summary"></div>
+  <div class="sent-grid" id="sent-grid"></div>
+</div>
+
+<script>
+// ============ DATA ============
+const CAMPS_DATA = [{"name": "흐름채 송추바베큐&셀프바베큐장", "address": "경기 양주시 장흥면 가마골로 271", "phone": "031-855-0094", "distance_km": 0.6, "kakao_id": "2074845189", "place_url": "http://place.map.kakao.com/2074845189", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.741813381004754, "lng": 126.97584057177617, "review_count": 19, "rating": 3.3, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 448, "naver_blog_review": 438, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 54.0, "score_detail": {"kakao_rating": 13.2, "kakao_review": 8.5, "naver_visitor": 17.7, "naver_blog": 14.7, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 5, "review_previews": [{"s": "naver", "t": "사이트 정보: 텐트 내부에 전자레인지와 냄비·집게·가위 등 기본 조리 도구가 비치돼 있어 재료만 가져오면 바로 요리가 가능합니다. 난로가 설치돼 있어 텐트 안이 따뜻하게 유지됩니다. 넓은 자리와 테이블·의자가 제공되", "r": null, "z": ""}, {"s": "naver", "t": "즐길거리: 모닥불을 피워 고구마, 감자, 마시멜로 등을 구워 먹는 체험이 가능합니다. 숯불 위에서 바베큐를 즐길 수 있어 야외 식사 분위기를 만끽할 수 있습니다.", "r": null, "z": ""}, {"s": "naver", "t": "<매점 운영> 버너,냄비,가위,집게,온수 등 무료 제공 바베큐에 필요한 대부분 비취되어 있으며 일부 품목은 유료 대여", "r": null, "z": ""}, {"s": "naver", "t": "셀프바베큐 처음와봤어요 난로도 있고 텐트에서 쉴수도 있고 필요한거 매점에서 바로바로살수있어서 좋아요", "r": null, "z": ""}, {"s": "naver", "t": "현장에 도착해보니 매점이 꽤 잘 갖춰져 있더라구요. 고기, 라면, 술, 기본 반찬까지 거의 캠핑 편의점 수준이에요.", "r": null, "z": ""}]}, {"name": "양주르 글램핑 캠핑장", "address": "경기 양주시 장흥면 가마골로 188-50", "phone": "", "distance_km": 1.0, "kakao_id": "893384468", "place_url": "http://place.map.kakao.com/893384468", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7350001310558, "lng": 126.980024409319, "review_count": 29, "rating": 4.9, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 13005, "naver_blog_review": 1004, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": true, "own_website_url": "https://m.", "booking_platforms": [], "popularity_score": 69.2, "score_detail": {"kakao_rating": 19.6, "kakao_review": 9.6, "naver_visitor": 20, "naver_blog": 15, "naver_rating": 0, "camfit_review": 0.0, "channel": 5}, "comp_rank": 2, "review_previews": [{"s": "naver", "t": "양주르 글램핑 캠핑장은 아이들과 함께 방문하기 좋은 가족 친화적인 공간입니다.", "r": null, "z": ""}, {"s": "naver", "t": "경기도 양주시에 위치한 양주르 는 아이들을 위한 특별한 경험을 선사하는 키즈 캠핑장입니다. 이곳의 가장 큰 자랑은 바로 독채 글램핑장 인데요, 넓은 공간에서 프라이빗하게 캠핑을 즐길 수 있어 익스클루시브한 가치를 더", "r": null, "z": ""}, {"s": "naver", "t": "무덥지만 화창한 날들이 이어지는 여름! 아기와 함께 양주르 글램핑 캠핑장 가보는거 어때요?! 저는 재방문 의사가 완전 있습니다요.", "r": null, "z": ""}, {"s": "naver", "t": "아이가 너무너무 좋아하고 다들 친절하시고 주차도 편하고 넓어요! 가격도 글램핑 생각하면 비싸지 않은 것 같아요!", "r": null, "z": ""}, {"s": "naver", "t": "경기 양주시 캠핑고기집 양주르 - AI 딩코의 맛집 공략", "r": null, "z": ""}]}, {"name": "비트윈캠크닉", "address": "경기 양주시 장흥면 가마골로 188-53", "phone": "031-836-0677", "distance_km": 1.1, "kakao_id": "1323313004", "place_url": "http://place.map.kakao.com/1323313004", "category": "여행 > 숙박 > 야영,캠핑장 > 글램핑장", "lat": 37.7361355619252, "lng": 126.981295854536, "review_count": 19, "rating": 3.3, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 1364, "naver_blog_review": 128, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": ["naver_booking"], "popularity_score": 58.4, "score_detail": {"kakao_rating": 13.2, "kakao_review": 8.5, "naver_visitor": 20, "naver_blog": 11.7, "naver_rating": 0, "camfit_review": 0.0, "channel": 5}, "comp_rank": 4, "review_previews": [{"s": "naver", "t": "글램핑, 데크, 파쇄석, 바비큐장, 키즈테마, 반려동물, 놀이터, 와이파이, 개별화장실, 개별샤워실", "r": null, "z": ""}, {"s": "naver", "t": "사이트 정보: 각 텐트 내부에 난방 설비가 갖춰져 겨울에도 따뜻하게 이용할 수 있습니다. 텐트에 배정된 바구니에 기본 이용 물품이 제공됩니다.", "r": null, "z": ""}, {"s": "naver", "t": "시설 정보: 공용 바베큐 구역이 마련되어 있어 고기를 직접 구워 먹을 수 있습니다. 매점에서 다양한 식료품과 생활용품을 구매할 수 있습니다. 어린이용 트램폴린, 공놀이 공간, 바이킹, 모래놀이 등 다양한 놀이 시설이", "r": null, "z": ""}, {"s": "naver", "t": "즐길거리: 크리스마스와 할로윈 등 특별 행사 시 산타 선물 증정 및 불꽃놀이가 진행됩니다. 불멍 공간에서 캠프파이어를 즐길 수 있습니다.", "r": null, "z": ""}, {"s": "naver", "t": "💸요금💸 텐트당 최소 2인 / 최대 6명까지 이용가능(성인기준) 영유아 및 키즈 포함시 최대 10명까지 이용가능", "r": null, "z": ""}]}, {"name": "캠프랩", "address": "경기 양주시 장흥면 권율로 327", "phone": "", "distance_km": 1.2, "kakao_id": "1480270932", "place_url": "http://place.map.kakao.com/1480270932", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.74097516227926, "lng": 126.9560349661938, "review_count": 8, "rating": 4.3, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": ["goodchoice"], "popularity_score": 28.4, "score_detail": {"kakao_rating": 17.2, "kakao_review": 6.2, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 5}, "comp_rank": 28, "review_previews": [{"s": "naver", "t": "쿠팡 캠프랩 매일 오픈되는 와우회원 특가 와우회원 최대 87% 할인", "r": null, "z": ""}, {"s": "naver", "t": "캠프랩, 실시간 확정 예약, 안심 환불, 매 월 진행되는 더블혜택 단독 특가 신규 와우회원 최대 2만3천원 쿠폰팩+5% 추가적립 혜택! 여행도 이제 쿠팡에서!", "r": null, "z": ""}, {"s": "naver", "t": "여행 숙소찾기 고민 끝! 예산맞춰 알아서 찾아주는 NOL 맞춤 특가! 양주캠프랩", "r": null, "z": ""}, {"s": "naver", "t": "캠프랩 원목 닭 떡 양꼬치 쇠 꼬챙이 2종 3P세트 바베큐 캠핑요리", "r": null, "z": ""}, {"s": "naver", "t": "캠프랩 그리들 스토브 8.8 강염 고화력 캠핑 휴대용 미니 이소가스 부탄가스 버너", "r": null, "z": ""}]}, {"name": "별을다는아이캠핑장", "address": "경기 양주시 장흥면 권율로309번길 132", "phone": "", "distance_km": 1.6, "kakao_id": "318516631", "place_url": "http://place.map.kakao.com/318516631", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.744040736057, "lng": 126.95261687543422, "review_count": 2, "rating": 4.8, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 2, "naver_blog_review": 86, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 36.3, "score_detail": {"kakao_rating": 19.2, "kakao_review": 3.1, "naver_visitor": 3.2, "naver_blog": 10.8, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 12, "review_previews": [{"s": "naver", "t": "별을다는아이 캠핑장 서울근교캠핑장 양주캠핑장 추천 (숲사이트)", "r": null, "z": ""}, {"s": "naver", "t": "양주캠핑장 별을다는아이 캠핑장 서울근교에 있는 캠핑장으로 굉장히 높은 지대에 있더라고요. 별을다는 아이 사이트는 아랫동, 윗동앞줄, 윗동날개, 윗동안쪽, 숲, 숲1, 숲2 사이트는 크게 3구역 세세하게 7곳으로 나뉘", "r": null, "z": ""}, {"s": "naver", "t": "이주전 캠핑 후 아이들이 불멍을 너무 좋아했어서 안가본 캠핑장을 찾던 중 거리도 적당하고 기격도 좋은 #별을다는아이 캠핑장을 찾아서 바로 예약을 때려 버립니다 ㅎㅎㅎ 양주에... 별을다는아이캼핑장은 관리가 잘 이루어", "r": null, "z": ""}, {"s": "naver", "t": "그러나 이미 인기있는 곳들은 예약이 꽉 찼고....그렇게 여기저기 알아보다 예약이 가능해서 가게 된 별을 다는 아이 캠핑장입니다. 초캠 파트너 캠핑장에 신설이라 일단 기본은 해줄 거라 믿었지만 큰 기대는 하지 않고 ", "r": null, "z": ""}, {"s": "naver", "t": "[경기/양주] 신생캠핑장 '별을 다는 아이' 정말 추천하고 싶은 캠핑장", "r": null, "z": ""}]}, {"name": "양주시미술관옆캠핑장 조각구역", "address": "경기 양주시 장흥면 권율로 234-25", "phone": "", "distance_km": 1.6, "kakao_id": "26864937", "place_url": "http://place.map.kakao.com/26864937", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7348445410638, "lng": 126.952615929931, "review_count": 54, "rating": 4.4, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 28.9, "score_detail": {"kakao_rating": 17.6, "kakao_review": 11.3, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 25, "review_previews": [{"s": "naver", "t": "양주 미술관옆캠핑장 조각구역 500급 카라반 가능할까요?", "r": null, "z": ""}, {"s": "naver", "t": "양주 미술관옆캠핑장 예약하려는데 카라반진입이 가능하다는 조각구역에 500급 카라반 가능할까요? 캠핑장에 전화해도 잘 모르시고 검색해도 카라반 관련글이 별로 없어 질문드려요~~ 혹시 다녀오신 분 계시면 도움주세요^^ ", "r": null, "z": ""}, {"s": "naver", "t": "달빛구역이나 별빛구역에 비해 한가한 양주 미술관옆캠핑장 조각구역이에요.. 컨테이너로 화장실과 개수대가 있어요... 생각보다는 깨끗하더라고요... 자동차와 함께 들어올 수 있는 오토캠핑장이에요... 나무테이블이 사이트", "r": null, "z": ""}, {"s": "naver", "t": "이곳은 별빛구역, 달빛구역, 조각구역의 3구역에 캠핑장을 마련했다. 별빛구역에 캠핑장 4면, 캐러밴 8대, 달빛구역에 캠핑장 20면, 조각구역에 캠핑장 9면을 갖췄다. 모든 캠핑 사이트에서 전기와 화로 사용이 가능하", "r": null, "z": ""}, {"s": "naver", "t": "양주미술관옆 캠핑장은 경기도 양주시 장흥면에 자리하고 있다. 이곳은 별빛구역, 달빛구역, 조각구역 총 세 구역의 캠핑장으로 나뉘어 있다. 별빛구역에는 캠핑장 4면, 캐러밴 8대, 달빛구역에는 캠핑장 20면, 조각구역", "r": null, "z": ""}]}, {"name": "장흥수목원 오토캠프장", "address": "경기 양주시 장흥면 권율로309번길 167-16", "phone": "031-855-1053", "distance_km": 1.8, "kakao_id": "17592585", "place_url": "http://place.map.kakao.com/17592585", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7448910934467, "lng": 126.950054379565, "review_count": 19, "rating": 3.3, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 21.7, "score_detail": {"kakao_rating": 13.2, "kakao_review": 8.5, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 37, "review_previews": [{"s": "naver", "t": "루프탑캠핑 ★국내최대★루프탑텐트 모임/차박캠핑/루프탑캠핑", "r": null, "z": ""}, {"s": "naver", "t": "캠핑장에서 걸어서 5분이면 장흥자생수목원이 있다. 인위적으로 조정한 것이 아니라 자연림을 살려 만든 곳이라 산림욕장으로 최고다. 장흥 오포캠핑장에서 대여하는 카라반도 있다. 이용자들이 많아 사전에 예약하는 것이 좋다", "r": null, "z": ""}, {"s": "naver", "t": "장흥수목원 캠핑장 캠핑장 상세정보 - '장흥수목원 캠핑장' - 장흥수목원 캠핑장은 서울근교 캠핑장으로, 장흥유원지에 위치하고 있다. 장흥유원지는 울창한 숲과 청정 장흥계곡이 있으며, 계곡을 따라 수영장, 상가, 방갈", "r": null, "z": ""}, {"s": "naver", "t": "예전 자연과 우리 들어가는 입구에 장흥수목원 오토캠핑장이 있어서 그리로 가곤 합니다 텐트는 안치고 방갈로 예약하고 빅돔 천정에 구멍내서 타프로 사용합니다 장흥수목원오토캠핑장 경기도 양주시 장흥면 위치, 캠핑장소개, ", "r": null, "z": ""}, {"s": "naver", "t": "장흥수목원오토캠핑장 자주 애용합니다. 집에서 30분거리고 수목원산책도 가능하고(그런데 비싸요 ㅠㅠ)놀이동산도 있으며, 농협하나로도 10분거리에 있어요. 캠핑도 가능하고 방갈로도 있고.팬션도 있습니다. 여름에 냇가에서", "r": null, "z": ""}]}, {"name": "포근마루 캠핑장", "address": "경기 양주시 장흥면 권율로 156-116", "phone": "010-4418-5288", "distance_km": 1.9, "kakao_id": "708942224", "place_url": "http://place.map.kakao.com/708942224", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.72875058447207, "lng": 126.95313708376955, "review_count": 45, "rating": 3.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 14, "camfit_review_count": 0, "has_own_website": true, "own_website_url": "https://www.marucamp.kr펼치기", "booking_platforms": [], "popularity_score": 27.8, "score_detail": {"kakao_rating": 12.0, "kakao_review": 10.8, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 5}, "comp_rank": 29, "review_previews": [{"s": "naver", "t": "양주포근마루캠핑장 가는길 바로앞에 스타벅스있는데 너무이뻐서 찍어봤어요 이런스벅은 처음와봤어요 애견캠퍼라 갈수있는곳이 많지않아서 아직 여러곳 돌아다니며 최애를 찾고있습니다 ㅎㅎㅎ 오늘 캠핑장에 사람이 없어서인지 캠장님", "r": null, "z": ""}, {"s": "naver", "t": "서울 근교 캠핑장 추천 양주 포근마루 캠핑장 내돈내산 후기", "r": null, "z": ""}, {"s": "naver", "t": "가능 캠핑장이에요. 그래서 캠프 사이트마다 울타리가 쳐져 있습니다 :) 포근마루 캠핑장 시설 아랫마루 기준 개수대 3칸 / 여자 화장실 2칸 + 샤워장 2칸 / 남자 화장실 1칸 + 소변기 1개... 비 오는 날 젖", "r": null, "z": ""}, {"s": "naver", "t": "[경기 양주 장흥] 서울 근교 힐링 캠핑장 '포근마루 캠핑장' 찐후기", "r": null, "z": ""}, {"s": "naver", "t": "[C.10] 서울근교 애견동반 가능한 포근마루 캠핑장 (중간마루 9)", "r": null, "z": ""}]}, {"name": "양주시니어클럽 캠핑장 매점", "address": "경기 양주시 장흥면 권율로 185", "phone": "031-841-7080", "distance_km": 2.1, "kakao_id": "854447604", "place_url": "http://place.map.kakao.com/854447604", "category": "가정,생활 > 슈퍼마켓", "lat": 37.7304894673399, "lng": 126.948825297742, "review_count": 45, "rating": 3.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 22.8, "score_detail": {"kakao_rating": 12.0, "kakao_review": 10.8, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 33, "review_previews": [{"s": "naver", "t": "2025년 양주시니어클럽 캠핑장 매점 오픈 안녕하세요. 양주시니어클럽입니다. 공동체사업단 '캠핑장 매점'이 지난 3월 25일 오픈을 하였습니다. '캠핑장 매점'은 미술관 옆 캠핑장 이용자들의 편의성을 높이고 양주시 ", "r": null, "z": ""}, {"s": "naver", "t": "2025.03.26.양주시가 지난 25일부터 ‘양주시니어클럽’에서 ‘노인일자리 신규사업’의 일환으로 ‘장흥면 미술관 옆 캠핑장 매점’을 운영한다고 밝혔다. 이번 ‘노인일자리 신규사업’인 ‘캠핑장 매점’은 양주도시공사", "r": null, "z": ""}, {"s": "naver", "t": "양주시니어클럽(캠핑장매점)은 양주사랑상품권, 민생지원금, 민생회복소비쿠폰 사용 가맹점/업체입니다. 기타종합소매점/기타종합소매점 업종에 해당합니다. 위치는 경기도 양주시 장흥면 권율로 185 (석현리)입니다.", "r": null, "z": ""}, {"s": "naver", "t": "양주시, ‘장흥면 미술관 옆 캠핑장 매점’ 운영 개시 - 언론보도 상세 - 시장24시", "r": null, "z": ""}, {"s": "naver", "t": "2025.03.27.이번 ‘노인일자리 신규사업’인 ‘캠핑장 매점’은 양주도시공사에서 운영하는 ‘미술관 옆 캠핑장’ 내에(양주시 장흥면 석현리 산180-10) 소재하고 있으며 캠핑 필수품, 식품류 등... 한편, 양주", "r": null, "z": ""}]}, {"name": "양주미술관옆 캠핑장 관리실", "address": "경기 양주시 장흥면 권율로 185", "phone": "", "distance_km": 2.1, "kakao_id": "1134594311", "place_url": "http://place.map.kakao.com/1134594311", "category": "서비스,산업 > 관리,운영 > 공원관리운영", "lat": 37.7304750399941, "lng": 126.948798082264, "review_count": 45, "rating": 3.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 22.8, "score_detail": {"kakao_rating": 12.0, "kakao_review": 10.8, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 34, "review_previews": [{"s": "naver", "t": "지금 할인받고 여행 떠나요! 국내숙소 총 15만원 할인 쿠폰팩! 양주캠핑장장박추천", "r": null, "z": ""}, {"s": "naver", "t": "양주 서울근교 캠핑장 미술관옆캠핑장 별빛구역 ( 가성비, 요금, 관리사무소, 운영시간, 화장실, 계곡 )", "r": null, "z": ""}, {"s": "naver", "t": "오늘 소개해드린 미술관옆캠핑장은 서울근교에 위치한 양주캠핑장인데요 30% 할인받은 금액은 21,000에 이용할수 잇는 곳으로 당일치기로 가셔서 고기구워먹고 돌아오시는 분들도 상당히 많은 캠핑장이에요 저희도 당일치기 ", "r": null, "z": ""}, {"s": "naver", "t": "2025.05.17.일반 캠핑 예정인 저희는 17,500원에 이용이 가능했어요~~~ 너무 저렴하죠~~~? 미술관 옆 캠핑장 도착하면 관리사무소에서 체크인하면 되는데, 양주 시민 30% 할인받으시는 경우 주민등록증 지", "r": null, "z": ""}, {"s": "naver", "t": "양주 미술관 옆 캠핑장 은 지자체에서 관리하는 곳으로 양주 시민부터 우선 예약 접수를 해요. 달빛 구역으로 차량을 주차 편의 시설은 캠핑장 관리실 쪽으로 한 곳에 위치 되어 있어요. 매점은 무인매점으로 술 빼고는 웬", "r": null, "z": ""}]}, {"name": "양주시 미술관옆 캠핑장", "address": "경기 양주시 장흥면 권율로 185", "phone": "031-828-9881", "distance_km": 2.1, "kakao_id": "26924717", "place_url": "http://place.map.kakao.com/26924717", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7308352977209, "lng": 126.948498353288, "review_count": 13, "rating": 4.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 50, "naver_blog_review": 257, "crawled_reviews": 16, "camfit_review_count": 0, "has_own_website": true, "own_website_url": "https://www.yjuc.or.kr/sub/content.asp?cIdx=13", "booking_platforms": [], "popularity_score": 53.2, "score_detail": {"kakao_rating": 16.0, "kakao_review": 7.5, "naver_visitor": 11.4, "naver_blog": 13.4, "naver_rating": 0, "camfit_review": 0.0, "channel": 5}, "comp_rank": 6, "review_previews": [{"s": "kakao_blog", "t": "여느 캠핑장들처럼 사이트가 다닥다닥 붙어있고, 데크가 3m x 6m로 좁고 긴 형태이며, 그늘이 없다는 점을 제외하면 깨끗하고 조용하며 접근성의 훌륭함 등등 만족스런 곳. 캠핑장... 더보기", "r": null, "z": ""}, {"s": "naver", "t": "사이트 정보: 미술관옆캠핑장은 파쇄석과 데크 사이트를 모두 제공하며, 사이트 크기가 다양해 텐트 크기에 따라 선택 가능합니다. 일부 사이트는 계곡 인근에 위치해 자연 경관을 즐길 수 있습니다.", "r": null, "z": ""}, {"s": "naver", "t": "위치 및 접근성: 경기도 양주시에 위치하며, 주차장은 관리사무소 인근에 마련되어 있습니다. 체크인은 오후 1시 30분부터 가능하며, 입실 시간은 오후 2시로 정해져 있습니다.", "r": null, "z": ""}, {"s": "naver", "t": "시설 정보: 달빛 구역에는 화장실과 샤워 시설이 있으며, 화장실 내 에어컨과 온수가 제공됩니다. 매점, 전자레인지, 불멍 공간, 매트 등이 구비되어 있고, 별빛 구역 이용객은 관리사무소 근처 시설을 이용해야 합니다.", "r": null, "z": ""}, {"s": "naver", "t": "양주 미술관 옆 캠핑장은 파쇄석뿐만 아닌 데크도 있어요 텐트가 크지 않으면 데크도 좋을 거 같아요", "r": null, "z": ""}]}, {"name": "양주시미술관옆캠핑장 달빛구역", "address": "경기 양주시 장흥면 권율로 185", "phone": "", "distance_km": 2.2, "kakao_id": "26864935", "place_url": "http://place.map.kakao.com/26864935", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7310405737944, "lng": 126.948166966154, "review_count": 3, "rating": 4.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 16, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 19.9, "score_detail": {"kakao_rating": 16.0, "kakao_review": 3.9, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 40, "review_previews": [{"s": "kakao_blog", "t": "솔로캠핑을 즐기러 왔다가 좋게 시작하였지만 타 사이트에 회사분들이 오셨는지 밤10시까지 시끌시끌 하시다가 철수를 하시는 바람에 매너타임이 잘 지켜지지 않는것 같음;; 기타 시설은 나름대로 사용하는... 더보기", "r": null, "z": ""}, {"s": "naver", "t": "양주 서울근교 캠핑장 미술관옆캠핑장 별빛구역 ( 가성비, 요금, 관리사무소, 운영시간, 화장실, 계곡 )", "r": null, "z": ""}, {"s": "naver", "t": "양주캠핑장 가성비 완전 대박이고 당일치기로 다녀오시는분들 아주 많음 계곡까지 근처에 있어서 여름에 특히 좋음 미술관옆캠핑장 1. 위치 : 경기도 양주시 장흥면 석현리 399... 사이트추가설명 #미술관옆캠핑장달빛구역", "r": null, "z": ""}, {"s": "naver", "t": "서울근교 캠핑장 추천 머물기 좋은 양주시 장흥 미술관옆 캠핑장", "r": null, "z": ""}, {"s": "naver", "t": "어디로든 떠나고 싶은 봄날 풍경 좋고, 근처에 볼거리가 많아 가족, 친구들과 머물다 오기 좋은 서울근교 캠핑장 추천 양주시 미술관 옆 캠핑장 소개해 드릴게요. 양주시립... 달빛구역 일반사이트와 오토사이트 모두 장욱", "r": null, "z": ""}]}, {"name": "청석펜션캠핑장", "address": "경기 양주시 장흥면 권율로309번길 289-5", "phone": "", "distance_km": 2.2, "kakao_id": "24373203", "place_url": "http://place.map.kakao.com/24373203", "category": "여행 > 숙박 > 야영,캠핑장 > 오토캠핑장", "lat": 37.7478990743194, "lng": 126.947179404385, "review_count": 54, "rating": 4.4, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 28.9, "score_detail": {"kakao_rating": 17.6, "kakao_review": 11.3, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 26, "review_previews": [{"s": "naver", "t": "청석펜션캠핑장은 경기 양주시 장흥면 석현리에 위치하고 있으며 총 3개의 사이트가 구성되어 있고, 화장실, 샤워실, 취사장 등의 편의시설을 이용할 수 있습니다. 인근에 가볼만한 관광지는 장흥자생수목원, 송암스페이스센터", "r": null, "z": ""}, {"s": "naver", "t": "★ 캠핑 그리고 차박 [글램핑 캠핑장,차박 캠핑용품,캠핑 카라반", "r": null, "z": ""}, {"s": "naver", "t": "경주 산내 캠핑장 수영장과 계곡이 있는 청석들팬션오토캠프", "r": null, "z": ""}, {"s": "naver", "t": "경주 산내 캠핑장 청석들팬션오토캠프 여름이 다가올수록 캠핑이나 야외를 찾는분들이 많아지고 있는데요 특히나 계곡이 있고 좀 더 시원한곳인 경주 산내는 캠핑장들이 밀집해있는데요 그중 수영장과 계곡 아이들 놀거리가 있는 ", "r": null, "z": ""}, {"s": "naver", "t": "친구들과 1박2일 모임하기 좋은곳... 경주 산내 청석들 오토캠핑장", "r": null, "z": ""}]}, {"name": "양주시미술관옆캠핑장 별빛구역", "address": "경기 양주시 장흥면 권율로 223", "phone": "", "distance_km": 2.2, "kakao_id": "26864936", "place_url": "http://place.map.kakao.com/26864936", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7324995555869, "lng": 126.946840943299, "review_count": 3, "rating": 3.7, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 16, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 18.7, "score_detail": {"kakao_rating": 14.8, "kakao_review": 3.9, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 41, "review_previews": [{"s": "kakao_blog", "t": "벌써 20번은 다녀온거 같네요. 이번에 카라반은 처음이었지만 평소에 다니던 오토캠핑장은 작년말에 노후시설 공사해서 시설도 아주 깔끔해 졌어요.", "r": null, "z": ""}, {"s": "naver", "t": "양주 서울근교 캠핑장 미술관옆캠핑장 별빛구역 ( 가성비, 요금, 관리사무소, 운영시간, 화장실, 계곡 )", "r": null, "z": ""}, {"s": "naver", "t": "양주캠핑장 가성비 완전 대박이고 당일치기로 다녀오시는분들 아주 많음 계곡까지 근처에 있어서 여름에 특히 좋음 미술관옆캠핑장 1. 위치 : 경기도 양주시 장흥면 석현리 399... 사이트 : 사이트는 일반캠핑장, 오토", "r": null, "z": ""}, {"s": "naver", "t": "가성비좋은 양주 계곡캠핑장 미술관옆캠핑장 별빛구역 아이랑 캠크닉", "r": null, "z": ""}, {"s": "naver", "t": "2025.06.16.그래서 양주시민이 아닌 저는 2일 오후1시에 항상 대기타서 다음달 캠핑을 미리 예약을 합니다 주말자리는 5분?안에 금방 예약이 차버리니 무조건 시간맞춰 대기하셔야해요 양주미술관옆캠핑장 사용료 별빛", "r": null, "z": ""}]}, {"name": "두리랜드 공룡카라반파크", "address": "경기 양주시 장흥면 권율로 120-1", "phone": "010-2994-7991", "distance_km": 2.3, "kakao_id": "1501530575", "place_url": "http://place.map.kakao.com/1501530575", "category": "여행 > 숙박 > 야영,캠핑장 > 카라반", "lat": 37.7248190288984, "lng": 126.951608248346, "review_count": 5, "rating": 5.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": true, "own_website_url": "https://www.kcaravan.com펼치기", "booking_platforms": [], "popularity_score": 30.1, "score_detail": {"kakao_rating": 20.0, "kakao_review": 5.1, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 5}, "comp_rank": 23, "review_previews": [{"s": "naver", "t": "공룡을 정말 좋아하는 저희집 둘째를 위해 양주 두리랜드 공룡 카라반 파크에 다녀왔어요. 아이들을 위한 것들이 가득 준비되어있는 키즈 캠핑 찾으신다면 추천해요 :) [ 양주 카라반 / 양주 캠핑 ] 두리랜드 공룡 카라", "r": null, "z": ""}, {"s": "naver", "t": "2025.07.18.두리랜드 한 켠에는 공룡 키즈 카라반 파크가 조성돼 있어, 10개 동의 내부 화장실·주방·에어컨·와이파이·TV 완비형 카라반 숙소가 운영중입니다. 가족 캠핑(봄~가을) 예약률이 높으며, 주변에는 ", "r": null, "z": ""}, {"s": "naver", "t": "2024.10.24.서울근교 양주 키즈 카라반 두리랜드 공룡카라반 파크 두 아이와 서울근교 양주 키즈 카라반을 다녀왔어요. 그 어디에서도 볼 수 없는 아주 특별한 곳이었는데요. 다이노 좋아하는 친구들은 진짜 난리 나", "r": null, "z": ""}, {"s": "naver", "t": "두리랜드공룡카라반파크 ^_^ 초대형 4m 공룡 카라반에! 아이들이 좋아하는 2층 침대와 게임기, 보드게임, 볼풀장, 암벽등반, 농구대에 구름사다리까지 갖춰져 있었고요. 카라반 파크 내... 두리랜드 공룡카라반 추천해", "r": null, "z": ""}, {"s": "naver", "t": "양주 키즈 카라반 두리랜드 공룡 카라반 파크 아이와 함께", "r": null, "z": ""}]}, {"name": "개명연수원펜션", "address": "경기 양주시 장흥면 권율로309번길 317-19", "phone": "010-8033-7489", "distance_km": 2.4, "kakao_id": "12344434", "place_url": "http://place.map.kakao.com/12344434", "category": "여행 > 숙박 > 펜션", "lat": 37.748326976633585, "lng": 126.94508224049208, "review_count": 3, "rating": 3.7, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 1, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 18.7, "score_detail": {"kakao_rating": 14.8, "kakao_review": 3.9, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 42, "review_previews": [{"s": "naver", "t": "안심하고 예약하는 NOL! 숙소 사유로 취소시 전액 환불해드려요! 개명연수원펜션", "r": null, "z": ""}]}, {"name": "자연과우리", "address": "경기 양주시 장흥면 권율로309번길 331", "phone": "", "distance_km": 2.4, "kakao_id": "12601850", "place_url": "http://place.map.kakao.com/12601850", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7493470909691, "lng": 126.945553513476, "review_count": 45, "rating": 3.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 7, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 22.8, "score_detail": {"kakao_rating": 12.0, "kakao_review": 10.8, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 35, "review_previews": [{"s": "naver", "t": "강원도양양펜션, 법수치 계곡펜션, 강원도 가족펜션, 강원도커플펜션, 양양펜션,naturalwe,naturalwe.com", "r": null, "z": ""}, {"s": "naver", "t": "- 서울우리소리박물관은 초등학교 단체를 대상으로 하는 비대면 교육프로그램 '자연관찰 우리소리'를 운영합니다. - 본 프로그램은 자연과 관련된 우리소리를 듣고 체험교구를 만들어보는 온라인 교육프로그램입니다. - 교육 ", "r": null, "z": ""}, {"s": "naver", "t": "책리뷰 | 자연이 우리를 행복하게 만들 수 있다면 - 우리 뇌는 자연이 필요하다. 자연과 인간은 하나, 자연이 주....", "r": null, "z": ""}, {"s": "naver", "t": "2023.08.23.Book Info <자연이 우리를 행복하게 만들 수 있다면> 키워드 및 책 정보 <자연이 우리를 행복하게 만들 수 있다면> 키워드 및 책 정보 <자연이 우리를 행복하게 만들 수 있다면> 키워드 및", "r": null, "z": ""}, {"s": "naver", "t": "양양의 자연과 우리 펜션 자동차 야영장은 산천어가 사는 법수치계곡에 위치한 펜션 겸 야영장이다. 야영장은 사이트가 총 3개뿐인 소규모인데, 5m x 10m 규모의 자연 사이트와 우리 사이트는 서로 인접해 있고, 6m", "r": null, "z": ""}]}, {"name": "로얄 수영장 캠핑장", "address": "경기 양주시 장흥면 호국로 576-17", "phone": "", "distance_km": 2.6, "kakao_id": "24440901", "place_url": "http://place.map.kakao.com/24440901", "category": "여행 > 숙박 > 야영,캠핑장 > 오토캠핑장", "lat": 37.7175533422655, "lng": 126.977910418463, "review_count": 1, "rating": 5.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 22.0, "score_detail": {"kakao_rating": 20.0, "kakao_review": 2.0, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 36, "review_previews": [{"s": "naver", "t": "[서울근교 취사가능]송추 로얄수영장 솔직후기! 수영장 캠핑장 추천!", "r": null, "z": ""}, {"s": "naver", "t": "< 송추 로얄수영장 > 고기구울수 있는 수영장으로 가자! 경기도 양주시 장흥면 울대리 424 031 - 826 - 5471010 - 9227 - 0562 입장가능 : AM 7시수영장 이용 : AM 9시부터 (1시간 ", "r": null, "z": ""}, {"s": "naver", "t": "캠핑장 정보에서 '로얄수영장'을 찾게 되어, 추후에 가볼까해서 머리속에 입력하였는데, 막상 홈페이지에 가보니, '09.23'자의 Q&A에 아래와 같은 내용이 있네요. 아래의 내용으로 보면, 정모아니면 불가한 것 같은", "r": null, "z": ""}, {"s": "naver", "t": "운동장까지 캠핑장으로 한다면 상당히 큰 규모가 될 것입니다. * 비용 :1박 2만원 추가 1박 만원씩+, 전기료 하루 3,000원, 당일 방문모드는 1인당 3,4천원씩 받는다고 합니다. * 오토캠핑 가능한지 : 가능", "r": null, "z": ""}, {"s": "naver", "t": "송추 로얄수영장 캠핑장 / 수영장개장하면 캠핑은 잠시 쉰데요~", "r": null, "z": ""}]}, {"name": "양주장흥VIP캠핑장", "address": "경기 양주시 장흥면 권율로 102-26", "phone": "031-855-8101", "distance_km": 2.7, "kakao_id": "838740161", "place_url": "http://place.map.kakao.com/838740161", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7227114753825, "lng": 126.949041624216, "review_count": 3, "rating": 1.7, "camfit_matched": true, "camfit_id": "669233afc1394b001e0843e6", "camfit_name": "양주장흥VIP캠핑장", "site_count": 41, "prices": [], "min_price": null, "max_price": null, "policy": "본인확인 후 입장 가능합니다. 양도 절대 불가\n모든 사이트 기준인원 총4명(성인2명+미성년2명) 최대인원 총6명 *성인끼리는 최대 4명까지만 가능*\n\n미성년자끼리는 캠핑이 불가 합니다.\n캠핑장 청소 및 관리시간\n12:00~14:00 입니다.\n\n샴푸, 바디워시, 세면도구, 수건 등 개인이 챙기셔야 합니다.\n이용자의 고의 또는 과실로 캠핑장 시설물이나 자연환경을 훼손하였을 경우 변상조치 됩니다.\n시설을 이용하는 동안 주의사항 미준수로 발생하는 안전사고에 대해서는 모든 책임이 이용자에게 있습니다.\n귀중품은 본인이 각별히 주의하시고 개인부주의로 인해 발생한 분실에 대해서는 책임지지 않습니다.\n쓰레기는 지정된 장소에 버려주시고 분리수거 꼭 해주세요!!!\n\n반려동물은 8kg 이하만 동반 가능하며 반드시 이동시 목줄 착용과 배설물을 수거필수.\n사나움, 심한 짖음, 목줄 미착용, 배변 미수거, 텐트 손상 등 이런한 경우 이용이 제한 되고 다른 캠퍼에게 피해가 갈 경우 그에 따른 책임은 반려동물 주인에게 있습니다.\n600w 이상의 전기용품 및 화기용품의 사용을 금지합니다.\n\n안전을 위해 텐트 안 이산화탄소 경보기 설치해주시기 바랍니다.\n캠핑장은 공공장소 이니 지정된 장소 외에 흡연을 금지합니다.\n지정된 장소 외에 취사, 흡연, 불, 노상방뇨, 등을  금지합니다.\n", "facilities": ["bbq", "individualRoom", "store", "canBringPet"], "camfit_address": "", "camfit_description": "*도심 근처, 편안하고 다채롭게 가족, 연인과 캠핑을 즐길 수 있는 장흥 양주 VIP 캠핑장\n\n경기도 양주시에 있는 조용하고 편안한 캠핑장입니다. 서울에서 차로 30분가량 걸리는 곳으로 청량한 나무숲과 개울가로 둘러싸여 있는 힐링공간입니다. 낮에는 여유롭게 자연 풍경을 즐길 수 있고 밤에는 아늑한 조명 속에서 별자리 찾아볼 수 있는 도심 끝 산자락 아래 있", "naver_rating": null, "naver_visitor_review": 32, "naver_blog_review": 43, "crawled_reviews": 47, "camfit_review_count": 47, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 42.6, "score_detail": {"kakao_rating": 6.8, "kakao_review": 3.9, "naver_visitor": 10.1, "naver_blog": 9.1, "naver_rating": 0, "camfit_review": 12.6, "channel": 0}, "comp_rank": 9, "review_previews": [{"s": "camfit", "t": "깨끗하고 사장님 친절\r\n퇴실날 눈예보있으니 천천히 정리해서 가라고 \r\n배려해 주셔서 맘편히 느긋히 정리했네요\r\n넘 감사했어요~\r\n편의점이나 맛집 가까워서 넘 좋고 \r\n집이랑도 가까워 좋아요\r\n내년? 올해? 어린이시설", "r": null, "z": "A구역 (텐트)"}, {"s": "camfit", "t": "집가까운곳이라 너무좋았어요.아이들도 가까워서좋았다고 하네요", "r": null, "z": "A구역 (텐트)"}, {"s": "camfit", "t": "---------------------------------", "r": null, "z": "B구역(텐트&자동차)"}, {"s": "camfit", "t": "프라이빗하고 바람 많이 분다고 하여 걱정했는데 뒤에 바로 산이 있구 앞에 건물들이 가로막고 있어 바람이 좀 덜불었네요\r\n사장님도 매우 친절하시고 집이랑 가까워 자주 올것 같습니다.", "r": null, "z": "C구역(텐트&자동차)"}, {"s": "camfit", "t": "사장님..친절은 기본이고. 관리동 너무 청결했습니다.\r\n이지캠 두번째 이용입니다. 피칭안하고 편하게 즐기다왔습니다.\r\n농장 텃밭에 쌈 채소 수확해서 고기와 같이 맛있게 먹었습니다. \r\n토끼풀...이 가득한 곳에서  ", "r": null, "z": "A구역(이지캠핑)"}, {"s": "camfit", "t": "덕분에 화목난로도 이용해보고 편하게 잘쉬다왔습니다\r\n화장실 개수대 다 깨끗했고 \r\n사장님 진짜 엄청 친절하셨어요\r\n매너타임도 잘지켜졌고 가까이 편의시설이 많아서 좋았어요", "r": null, "z": "A구역 (이지캠핑)"}, {"s": "camfit", "t": "사장님 너무너무 친절하시고 화장실 샤워실 너무 깨끗해서 좋았습니다", "r": null, "z": "B구역(텐트&자동차)"}, {"s": "camfit", "t": "추석연휴에 급하게 예약해서 갔는데 사장님들 친절하셔서 좋았어요ㅎㅎ 빌라뷰는 처음이라 당황했는데 또 금방 적응되더라구요ㅋㅋㅋ 걸어서 편의점&근처 음식점도 갈 수 있어서 먹다가 부족한 거 추가로 사서 온 거는 좋았어유.", "r": null, "z": "B구역(텐트&자동차)"}, {"s": "camfit", "t": "관리동 깔끔하고 온수 잘나옵니다.\r\n주변에 볼거리 먹을거리도 많아서 좋았습니다.\r\n사이트 사이에 나무 등으로 사이트 사이를 좀 떨어뜨려놓는다면 더욱 좋을거 같습니다~!\r\n추천해요", "r": null, "z": "B구역(텐트&자동차)"}, {"s": "camfit", "t": "집에서 가깝고 시설도 좋고 좋았습니다", "r": null, "z": "B구역(텐트&자동차)"}, {"s": "camfit", "t": "아르보리아는 항상 좋은 추억을 만들어 준 곳이에요!", "r": null, "z": ""}, {"s": "camfit", "t": "사장님이 친절하시고. 설명이 자세하셔서 편하게 잘놀다갑니다.\r\n충주로 다시 오게된다면 꼭 다시 여기로오고싶네요.", "r": null, "z": ""}]}, {"name": "장흥약수펜션", "address": "경기 양주시 장흥면 권율로309번길 317-173", "phone": "031-855-3122", "distance_km": 3.0, "kakao_id": "13099924", "place_url": "http://place.map.kakao.com/13099924", "category": "여행 > 숙박 > 펜션", "lat": 37.7493544996691, "lng": 126.938627421091, "review_count": 1, "rating": 5.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 38, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": true, "own_website_url": "http://장흥약수펜션.com", "booking_platforms": [], "popularity_score": 35.8, "score_detail": {"kakao_rating": 20.0, "kakao_review": 2.0, "naver_visitor": 0.0, "naver_blog": 8.8, "naver_rating": 0, "camfit_review": 0.0, "channel": 5}, "comp_rank": 13, "review_previews": [{"s": "naver", "t": "시설 정보: 실내 바베큐장이 별도로 마련되어 있어 날씨에 관계없이 이용 가능합니다. 2층과 1층 모두 바베큐 공간이 있으며 환풍구와 냉난방 설비가 잘 갖춰져 있습니다. 넓은 거실과 베란다에 바비큐장이 추가로 제공됩니", "r": null, "z": ""}, {"s": "naver", "t": "숙박하기에는 불편함이 없이 일반 빌라처럼 따뜻한 보일러 온도, 깨끗한 룸과 침구, 욕실에 수건과 헤어드라이기 등, 주방시설과 기구, 커다란 냉장고도 있습니다.", "r": null, "z": ""}, {"s": "naver", "t": "화장실도 보이시죠 넉넉한 수건과 휴지! 장흥유원지펜션 장흥약수펜션아라 가능한거죠 칫솔 비누 샴푸도 준비되어있어서 폼클렌징&칫솔만 챙겨오시면 되세요 뜨거운물 콸콸 아주 잘 나온답니다", "r": null, "z": ""}, {"s": "naver", "t": "추운 계절에는 야외 바베큐가 부담스러운데 여기는 실내 바베큐장이 따로 마련되어 있어서 날씨 신경 안 쓰고 편하게 즐길 수 있다는게 장흥 약수펜션 만의 큰 장점이라고 볼 수 있습니다", "r": null, "z": ""}, {"s": "naver", "t": "들어가면 넓은 거실과 방들이 있고 베란다에는 바비큐를 할 수 있는 바베큐장이 있었어요! 바베큐하실때 숯을 사 오시면 2만 원이고 숯이 없으면 4만 원 이니 꼭 사 오시는 걸 추천드립니다🙌", "r": null, "z": ""}]}, {"name": "양주잼잼 글램핑", "address": "경기 양주시 장흥면 권율로 60", "phone": "0502-5551-4974", "distance_km": 3.0, "kakao_id": "350424772", "place_url": "http://place.map.kakao.com/350424772", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.72042785497442, "lng": 126.94577317841552, "review_count": 26, "rating": 4.8, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 16, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": ["naver_booking"], "popularity_score": 33.5, "score_detail": {"kakao_rating": 19.2, "kakao_review": 9.3, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 5}, "comp_rank": 16, "review_previews": [{"s": "kakao_blog", "t": "서울 근교 경기도 글램핑카라반 양주잼잼 체크인, 어메니티, 개인준비물, 주차, 온수풀 수영장, 불멍 내돈내산 꿀팁", "r": null, "z": ""}, {"s": "naver", "t": "택시비 지원, 초대형 인피니티풀, 사계절온수풀, 럭셔리한 프라이빗 고급바베큐시설", "r": null, "z": ""}, {"s": "naver", "t": "G마켓 양주잼잼 당신에게 꼭 필요한 멤버십 ~4/20 사전가입혜택", "r": null, "z": ""}, {"s": "naver", "t": "사계절 온수풀에 불멍까지 제대로 즐길 수 있는 곳 #양주잼잼 #양주글램핑", "r": null, "z": ""}, {"s": "naver", "t": "더 🏊‍♀️ #양주잼잼글램핑 #양주글램핑 #서울근교글램핑...", "r": null, "z": ""}]}, {"name": "해피니스 캠핑장 행복야영", "address": "경기 양주시 장흥면 권율로309번길 317-196", "phone": "031-877-5502", "distance_km": 3.1, "kakao_id": "765620430", "place_url": "http://place.map.kakao.com/765620430", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.749415836436, "lng": 126.937053567953, "review_count": 8, "rating": 2.9, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 17.8, "score_detail": {"kakao_rating": 11.6, "kakao_review": 6.2, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 44, "review_previews": [{"s": "naver", "t": "[경기도 양주] 친구따라 가서 대만족하고 온 '해피니스 캠핑장' 후기 :)", "r": null, "z": ""}, {"s": "naver", "t": "양주 장흥면 '해피니스 캠핑장'을 소개합니다. 평일 3만원!!", "r": null, "z": ""}, {"s": "naver", "t": "해피니스 캠핑장은 행복 야영이라고도 불립니다. 오셔서 행복을 만끽하세요~~! 감성 가득한 캠핑장입니다. 이곳은 바로 위에 대원정사라는 절이 하나 있는데 덕분인지 주차장이 엄~청 넓습니다. 주차 걱정은 하지 마세요 캠", "r": null, "z": ""}, {"s": "naver", "t": "서울 근교, 수도권 맑은 공기 행복야영 : 양주 해피니스캠핑장 - 캠핏으로 전국 캠핑장을 가장 쉽고 빠르게...", "r": null, "z": ""}, {"s": "naver", "t": "해피니스캠핑장 Happiness camp 야영장 감성캠퍼의 성지 해피니스 캠핑장으로 소개된 2021년 신축의 해피니스 캠핑장은 경기도 양주의 산꼭대기에 자리하고 있어 공기가 맑고 시원하며... 이 좋은 공기와 내가 ", "r": null, "z": ""}]}, {"name": "써니네캠핑장", "address": "경기 양주시 장흥면 호국로 404", "phone": "", "distance_km": 3.1, "kakao_id": "1054081112", "place_url": "http://place.map.kakao.com/1054081112", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7128029118194, "lng": 126.961846982984, "review_count": 19, "rating": 3.3, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 13, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 21.7, "score_detail": {"kakao_rating": 13.2, "kakao_review": 8.5, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 38, "review_previews": [{"s": "naver", "t": "경기 양주 800평 송추써니네 애견마당/애견운동장/냉난방/애견놀이터 예약바로가기 서울근교, 의정부, 김포 근교 800평 단독애견운동장, 냉난방공간, 애견수영장구비", "r": null, "z": ""}, {"s": "naver", "t": "있는거 같고 전자렌지 포터 등등 있습니다 특이한 게 수세미가 없어요 설겆이 못해갔습니다 대략 이렇게 생긴 써니네캠핑장 주방 캠핑장 바로 옆에는 주인이 거주하는 공간같더라구요 여기에도 골든 리트리버 친구가 있던데 우리", "r": null, "z": ""}, {"s": "naver", "t": "써니네 캠핑장...본관 1박은 미리 사전 예약...3팀 정도만 받는다고~ 캠핑장 옆으로 계곡... 우리는 당일 피크닉으로 간단히 준비... 간단모드로 셋팅~ 오늘의 시작은 라면... 면빨 죽이고~ 딸과 단둘이 라면.", "r": null, "z": ""}, {"s": "naver", "t": "캠핑장이었던 곳이 강아지마당으로 바뀌었어용(송추 써니네마당)", "r": null, "z": ""}, {"s": "naver", "t": "송추 써니네캠핑장 이었는데 이젠 캠핑을 안받는대요 가까워서 좋은데 아쉽 써니네마당으로 바뀜ㅎㅎ 멍멍이들 오랜만에 자유롭게 뛰어노는 곳 델꼬갔더니 신났어요 저희집 멍이들은 다른강아지들을 별로 안좋아해서 우리끼리만 놀 ", "r": null, "z": ""}]}, {"name": "홍복생태학습장", "address": "경기 양주시 백석읍 복지리 464", "phone": "", "distance_km": 3.3, "kakao_id": "1955622327", "place_url": "http://place.map.kakao.com/1955622327", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7628415778571, "lng": 126.993906796046, "review_count": 196, "rating": 4.2, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 31.7, "score_detail": {"kakao_rating": 16.8, "kakao_review": 14.9, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 19, "review_previews": [{"s": "naver", "t": "맑은 공기, 자연 그대로의 모습으로 맞이하는 홍복생태학습장으로 지금 가보시죠. 백석읍 복지리에 위치한 홍복생태학습장이 문을 열었습니다. 울창한 숲과 더불어 연꽃과 수련 등 각종 수생식물이 있는 습지까지, 자연의 신비", "r": null, "z": ""}, {"s": "naver", "t": "아이들과 놀러갈만한곳 양주시 백석읍 홍복생태학습장 아이들과 놀러갈만한곳 홍복생태학습장이 오늘 7월16일 양주시 백석읍 복지리홍복마을에서 개장식을 가졌습니다 홍복... 놀러갈만한곳 생태학습장으로 손색이 없죠? 백석읍 ", "r": null, "z": ""}, {"s": "naver", "t": "홍복생태학습장은 읍사무소와 주민 자치위원회가 협의하여 만들어진 자연 생태학습장입니다. 조용한 자연을 마음껏 느끼면서 나만의 산책을 즐길 수 있는 괜찮은 곳입니다. 이곳을 가기위해서는 복지2리 마을회관을 내비에 입력하", "r": null, "z": ""}, {"s": "naver", "t": "지난 7월 문을 연 홍복생태학습장은 수생식물이 식재된 습지(6천600㎡)와 야생화 단지(3천㎡), 쉼터 및 학습장(2천㎡) 등으로 조성돼 있으며, 자연 생태학습장이 전무한 관내 초등학교 및 어린이집 등의 참여열기로 ", "r": null, "z": ""}, {"s": "naver", "t": "가까운곳에 홍복생태학습장이 있습니다 2015년 지역 특색사업으로 선정된 백석읍 홍복생택학습장이 개장을 하였습니다 다양한 생태활동으로 아이들과 함께 공부하고 체험할 수 있는 공간입니다. 백석읍에 위치한 홍복 생태학습장", "r": null, "z": ""}]}, {"name": "일영스타캠핑장", "address": "경기 양주시 장흥면 유원지로 406-144", "phone": "", "distance_km": 3.3, "kakao_id": "923501128", "place_url": "http://place.map.kakao.com/923501128", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.71466795878327, "lng": 126.9498966125462, "review_count": 1, "rating": 5.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 35, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 30.6, "score_detail": {"kakao_rating": 20.0, "kakao_review": 2.0, "naver_visitor": 0.0, "naver_blog": 8.6, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 22, "review_previews": [{"s": "naver", "t": "단체, 파쇄석, 차박, 오토캠핑, 카라반, 와이파이, 계곡, 문화유적", "r": null, "z": ""}, {"s": "naver", "t": "양주 일영 송추 등등 근처에서 가장 숲속에 있는 느낌 전화 예약후 도착한 일영 스타 캠핑장 여기를 선택한 이유는 일단 넓은 초대형 사이즈 쓸데없는 물놀이 기구들 인공적인 구조물들 없고 단체 손님 소음 등등 없고 오가", "r": null, "z": ""}, {"s": "naver", "t": "[경기 양주] 일영스타 캠핑장 동계 솔캠, 24년 전 군 생활의 추억과 화목난로의 온기", "r": null, "z": ""}, {"s": "naver", "t": "하지만 24년이라는 시간이 흘렀지만 낯익은 풍경들이 반겨주는 듯해 설레는 마음으로 캠핑장에 도착했습니다. 일영스타캠핑장은 아담하면서도 정겨운 분위기를 가진 곳입니다. 특히 이곳은 실내에 배드민턴장과 미니 당구대 같은", "r": null, "z": ""}, {"s": "naver", "t": "캠핑장이 있으니, 미리 숙지 후 양도 & 양수 게시글을 올려주세요 양도 및 교환 글 작성 시 제목 말머리 선택해주시고 제목에서도 볼 수 있게 0월 0일 00캠핑장- 예시 [양도] 0월 00일 00캠핑장 이런식으로 제", "r": null, "z": ""}]}, {"name": "오림피아 캠핑장", "address": "경기 양주시 장흥면 호국로 176-16", "phone": "", "distance_km": 3.8, "kakao_id": "9261440", "place_url": "http://place.map.kakao.com/9261440", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.714897200805204, "lng": 126.94101262698682, "review_count": 54, "rating": 4.4, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 28.9, "score_detail": {"kakao_rating": 17.6, "kakao_review": 11.3, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 27, "review_previews": [{"s": "naver", "t": "집에서 가깝고 토,일만 개방해서 선택한 캠핑장인 오림피아 캠핑장을 다녀왔습니다. 금요일날 갈 수 없는 나의 환경에서 토,일만 개방하니 빨리 가서 좋은 자리를 잡을 수 있어... 아이도 지금까지 갔던 캠핑장중에 가장 ", "r": null, "z": ""}, {"s": "naver", "t": "[주소] 경기도 양주군 장흥면 133-3 오림피아 캠프촌 031-855-5237 [약도] 장흥유원지 들어가는입구 Y자 갈림길에서 오른쪽 농협건물 뒤쪽에 위치함 [특징] 무엇보다 접근성이 좋아 그 부분 강추 그러나 몇", "r": null, "z": ""}, {"s": "naver", "t": "장박중인 지인 방문이라 시설 사진은 없습니다만 과거 수영장으로 운영되었던 곳인데 캠핑장 시설을 다양하게 준비중이하고 합니다. 보니 장박팀도 몇 팀 보이고, 글램핑 장, 시설... 상일IC - 송추 IC - 오림피아캠", "r": null, "z": ""}, {"s": "naver", "t": "그럼 타임머신 가동합니다~ 서울근교 캠핑장 오림피아캠핑장은 경기도 장흥에 위치해 집에서 30분만에 도착할 정도로 가까운 위치에 있었어요. 장흥 하나로마트 뒤쪽에 있어 생각보다 일찍 도착하자마자 짐을 풀고 텐트와 타프", "r": null, "z": ""}, {"s": "naver", "t": "한때 캠핑을 접으려 마음 먹은 것도 캠핑장인지 돗데기 시장인지 난민촌인지 구별이 가지 않을 만큼 시끄럽고 난잡하고...그런데 오림피아는 그렇지 않다. 같이 간 친구 부인이 \"이렇게 조용한 캠핑은 처음 해본다\"고 할 ", "r": null, "z": ""}]}, {"name": "일영모자농원캠핑장", "address": "경기 양주시 장흥면 유원지로 316-1", "phone": "031-855-5081", "distance_km": 3.8, "kakao_id": "1137647137", "place_url": "http://place.map.kakao.com/1137647137", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.708172331878046, "lng": 126.95304117562917, "review_count": 5, "rating": 5.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 35, "naver_blog_review": 97, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 46.5, "score_detail": {"kakao_rating": 20.0, "kakao_review": 5.1, "naver_visitor": 10.4, "naver_blog": 11.1, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 7, "review_previews": [{"s": "naver", "t": "파쇄석, 오토캠핑, 독채, 온돌방, 수영장, 반려동물, 바비큐장, 와이파이, 공용시설, 잔디, 계곡", "r": null, "z": ""}, {"s": "naver", "t": "24년 장박을 보내고나서 멍때리고 쉬면 생각나는곳 기본적으로 입퇴실 시간이 오전 10시? 입실 퇴실이 무려.. 오후 4시 이전!!!! 엄청나죠... 세척실 샤워실 화장실.매일 깨끗히 관리하셔서 그런지 엄청 청결합니다", "r": null, "z": ""}, {"s": "naver", "t": "경기도 양주 일영모자농원캠핑장은 일영유원지 계곡 옆에 위치해 있다. 공간이 넓어 여유 있게 텐트를 설치할 수 있고 인조 잔디가 깔린 대운동장과 소운동장이 있어 기업체 행사나 야유회, 친목회, 워크숍, 체육대회를 하기", "r": null, "z": ""}, {"s": "naver", "t": "우리가족 첫캠핑 경기도 일영 모자농원 캠핑장에서의 1박2일", "r": null, "z": ""}, {"s": "naver", "t": "해서 다녀왔어요 저희가 예약하고 다녀온 곳은 일영모자농원캠핑장이에요 일영모자농원캠핑장 경기 양주시 장흥면 유원지로 316-1 1박 6만원 이에요~ 2박시 11만원 예약문의는 031-855-5081... 캠핑장 입실 ", "r": null, "z": ""}]}, {"name": "라온빌리지 양주 애견글램핑", "address": "경기 양주시 백석읍 권율로 848", "phone": "031-932-8188", "distance_km": 3.9, "kakao_id": "930684715", "place_url": "http://place.map.kakao.com/930684715", "category": "여행 > 숙박 > 야영,캠핑장 > 글램핑장", "lat": 37.7743245365946, "lng": 126.961453305652, "review_count": 1, "rating": 4.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 18.0, "score_detail": {"kakao_rating": 16.0, "kakao_review": 2.0, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 43, "review_previews": [{"s": "naver", "t": "양주 애견동반 글램핑 추천, 글램핑코리아 양주애견점(라온빌리지)", "r": null, "z": ""}, {"s": "naver", "t": "울 땡이 곤듀님이랑 외박하는거~ 내가 방문했던 곳은 라온빌리지 글램핑이닷. 체인점이라 전국 8개 지역에 있는데, 내가 갔던 곳은 양주~~ 집이랑 한시간도 안되는 거리라 가기 조트라 울 집 땡이 곤듀님 나간다고 핵 신", "r": null, "z": ""}, {"s": "naver", "t": "그리고 화수목애견 놀이터와 라온빌리지양주애견글램핑 서울 근교에 위치하고 있는 것으로 남양주와 양주에 위치하고 있어 나들이를 떠났을 때 반려견과 함께 야외활동을 즐길 수 있습니다. 마지막으로 캠핑 애견놀이터 폴짝 po", "r": null, "z": ""}, {"s": "naver", "t": "[양주 애견동반 무박 글램핑 후기] - 글램핑코리아 양주애견점 다녀옴 ‼️", "r": null, "z": ""}, {"s": "naver", "t": "2020.11.28.양주에 애견동반이 가능한 글램핑장이 있다고 하여.. 고고씽! [무박 이용 관련] 1 가격 - 기준 2명 당 반려견(소형견) 2마리 : 70,000원 (1마리 추가 시 10,000원 소형견 최대 4", "r": null, "z": ""}]}, {"name": "그린랜드", "address": "경기 양주시 장흥면 유원지로 279", "phone": "031-855-5357", "distance_km": 3.9, "kakao_id": "26630766", "place_url": "http://place.map.kakao.com/26630766", "category": "여행 > 숙박 > 펜션", "lat": 37.709122760411994, "lng": 126.94848843343787, "review_count": 166, "rating": 4.5, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 32.5, "score_detail": {"kakao_rating": 18.0, "kakao_review": 14.5, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 18, "review_previews": [{"s": "naver", "t": "[정용석의 서울시평] 트럼프 그린랜드 접수하면 히틀러처럼 불행해진다", "r": null, "z": ""}, {"s": "naver", "t": "도널드 트럼프 미국 대통령은 집권 1기 때부터 덴마크의 자치령 그린랜드 편입을 주장했다. 그러나 세계는 단순히 허풍인 줄 알다. 하지만 트럼프 행정부는 올 1월7일 그린랜드의 매입을 공식 외교정책 목표로 삼았다. 백", "r": null, "z": ""}, {"s": "naver", "t": "그는 얼음으로 뒤덮인 이 섬에 정착할 이민자 모집을 위해 이를 ‘초록 섬’이란 뜻의 ‘그린랜드’라고 부른다. 유럽 역사에서 그린랜드는 이렇게 등장한다. 북미 대륙에 유럽인들이 본격적으로 정착하기 시작한 것은 1607", "r": null, "z": ""}, {"s": "naver", "t": "액션 스타 제이슨 스타뎀과 '엔젤 해즈 폴른', '그린랜드'로 블록버스터 연출 능력을 인정받은 릭 로먼 워 감독이 만나 화제를 모은 작품이다. 여기에 '햄넷'의 신예 보디 레이 브레스낙과 아카데미 후보이자 다방면으로", "r": null, "z": ""}, {"s": "naver", "t": "오늘의 영화는 '그린랜드(Greenland, 2020)'입니다. 누구나 한 번쯤 겪게되는 고난. 어려움. 실패. 사람마다 기준이 다르고 어려움의 극복정도가 다르겠지만... 그 안에서도 잃을 수 없는 '가족'을 나는 ", "r": null, "z": ""}]}, {"name": "대궐캠핑글램핑펜션", "address": "경기 양주시 백석읍 기산로440번길 177", "phone": "031-871-4113", "distance_km": 4.2, "kakao_id": "21286564", "place_url": "http://place.map.kakao.com/21286564", "category": "여행 > 숙박 > 야영,캠핑장 > 오토캠핑장", "lat": 37.768642873996, "lng": 126.939569402274, "review_count": 10, "rating": 2.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 14.8, "score_detail": {"kakao_rating": 8.0, "kakao_review": 6.8, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 45, "review_previews": [{"s": "naver", "t": "캠핑 초짜이기에 텐트 등 모든 것이 준비되어 있는 글램핑을 하기로 했다. 양주시에 있는 대궐캠핑글램핑펜션. 산 중턱에 자리잡고 있어 올라가는 길이 조금 가파르다. 나무가 많고 주변에 계곡이 흐른다. 며칠간 비가 많이", "r": null, "z": ""}, {"s": "naver", "t": "🌳피톤치드 가득한 숲속 공기, 아름다운 마장호수와 가까운 곳 🌳숲속 나무그늘, 최상류 청정 계곡, 다람쥐가 뛰놀고 산새가 노래하는곳 🌳야외 수영장, 키즈 실내/실외 놀이공간, 풋살장 레저시설 무료이용", "r": null, "z": ""}, {"s": "naver", "t": "대궐·캠핑장·펜션·글램핑 서울근교 양주 대궐글램핑장 후기!", "r": null, "z": ""}, {"s": "naver", "t": "해서 사람들을 피해 행복한 시간을 지낼곳을 찾았어요 인천에 살다보니 인천근처는 이제 질리고 근처에 다른 글램핑장을 찾다 가게된 양주 #대궐글램핑장 대궐글램핑장은 글램핑,캠핑,펜션 등 여러가지를 다 즐길수 있는 곳이에", "r": null, "z": ""}, {"s": "naver", "t": "파쇄석 사이트 캠핑장 ( 일반사이트, 패밀리존, NO PET ZONE) 50,000 · 데크 사이트 캠핑장 /벨리존 데크 캠핑 60,000", "r": null, "z": ""}]}, {"name": "대궐산장식당", "address": "경기 양주시 백석읍 기산로440번길 177", "phone": "", "distance_km": 4.2, "kakao_id": "27584196", "place_url": "http://place.map.kakao.com/27584196", "category": "음식점 > 한식", "lat": 37.768642873996, "lng": 126.939569402274, "review_count": 3, "rating": 2.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": 4.06, "naver_visitor_review": 60, "naver_blog_review": 53, "crawled_reviews": 6, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 41.6, "score_detail": {"kakao_rating": 8.0, "kakao_review": 3.9, "naver_visitor": 11.9, "naver_blog": 9.6, "naver_rating": 8.1, "camfit_review": 0.0, "channel": 0}, "comp_rank": 10, "review_previews": [{"s": "naver", "t": "반려견 동반 식당이기에 대궐산장 선택. 주변 반려견 식당과 비교 하자면 계곡을 중심으로 일자로 테이블이 놓여져 복잡하지 않습니다. 닭백숙과 반찬이 아주 맛있습니다. 식당, 펜션, 글램핑, 캠핑장 같이 운영 됩니다. ", "r": null, "z": ""}, {"s": "naver", "t": "🌳풍경이 기가막히고 여름나들이 좋은 파주 양주 반려동반 가볼만한곳! 오랜만에 몸보신좀 할겸 멍뭉이랑 나들이 가볼만한곳을 엄청 찾아보다가 풍경이 좋은거같아서 방문햐본 양주 대궐산장! 풍경이 너무 좋고 시원한 물소리 들", "r": null, "z": ""}, {"s": "naver", "t": "대궐산장은 피톤치드 가득한 나무 그늘에서 산새소리를 들으며 식사할 수 있는 식당이다. 1만여 평 규모의 대궐산장에는 송사리가 살고 있을 만큼 깨끗한 최상류 청정계곡과 다람쥐, 개구리가 뛰어다니며, 천연기념물인 장수하", "r": null, "z": ""}, {"s": "naver", "t": "대궐산장 ; 경기 양주시 · 계곡 바로 옆에서 식사가 가능한 식당 · #가족식사_추천#꼬마통돼지바베큐#닭볶음탕#대궐산장#맛집#백숙#양주맛집", "r": null, "z": ""}, {"s": "naver", "t": "yangju.grandculture.net›대궐산장식당›지명/기관명", "r": null, "z": ""}]}, {"name": "대궐힐링파크", "address": "경기 양주시 백석읍 기산로440번길 177", "phone": "", "distance_km": 4.2, "kakao_id": "24892209", "place_url": "http://place.map.kakao.com/24892209", "category": "여행 > 숙박 > 펜션", "lat": 37.76868608826452, "lng": 126.93950694346346, "review_count": 198, "rating": 3.1, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 4, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 27.4, "score_detail": {"kakao_rating": 12.4, "kakao_review": 15.0, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 30, "review_previews": [{"s": "naver", "t": "계곡의아침 · 경기도 양주시 백석읍 기산리 367번지 · '대궐힐링파크'에서 0.3km", "r": null, "z": ""}, {"s": "naver", "t": "고고씽펜션 · 경기도 양주시 백석읍 기산리 341번지 · '대궐힐링파크'에서 0.8km", "r": null, "z": ""}, {"s": "naver", "t": "대궐힐링파크 (양주시 백석읍 기산리) 농어촌민박업 소리114 - 전국 생활편의 정보 소리114", "r": null, "z": ""}, {"s": "naver", "t": "1주 전대궐힐링파크 (양주시 백석읍 기산리) 농어촌민박업 대궐힐링파크※ 전화번호정보없음※ 서비스농어촌민박업※ 소재지경기 양주시 백석읍 기산리※ 도로명주소(11518) 경기도 양주시 백석읍 기산로440번길 177※ 지", "r": null, "z": ""}]}, {"name": "해일캠프촌", "address": "경기 양주시 장흥면 일영로740번길 104-29", "phone": "", "distance_km": 4.2, "kakao_id": "1368965327", "place_url": "http://place.map.kakao.com/1368965327", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7118127125447, "lng": 126.938358992789, "review_count": 54, "rating": 4.4, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 5, "camfit_review_count": 0, "has_own_website": true, "own_website_url": "http://cafe.daum.net/haiiltown", "booking_platforms": [], "popularity_score": 33.9, "score_detail": {"kakao_rating": 17.6, "kakao_review": 11.3, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 5}, "comp_rank": 15, "review_previews": [{"s": "naver", "t": "2008.03.07.상단 야영장으로 가는 도중에 거치게 되는 길옆 캠프사이트. / 해일농장 입구에 이색적인 간판이 걸려 있다. 해일농장을 찾는 캠퍼들은 입구의 거대한 고목에 걸려 있는 간판에 놀란다. 나무로 만든 글", "r": null, "z": ""}, {"s": "naver", "t": "2008.03.07.그러나 해일농장의 숲이 아무리 보존이 잘 됐다 해도 강원도의 국립공원에는 비할 수 없을 것이다. 주변에 별다른 고층 건물은 없지만, 캠프장에서 보이는 장흥 입체교차로의 대형 구조물은 이곳이 대도시", "r": null, "z": ""}, {"s": "naver", "t": "2015.05.06.솔밭가족캠프촌(양양) 솔밭캠프장 솔섬오토캠핑장 솔숲캠핑장 송라천펜션야영장 송암레포츠타운캠핑장 송정해수욕장 송지호오토캠핑장 수캠프 수타계곡오토캠핑장 순긋해수욕장 숲과계곡속으로 숲속힐링오토캠핑장 스카", "r": null, "z": ""}, {"s": "naver", "t": "공지사항 - 송년 캠프 장소 확정 + 개최일 변경(12월10일--> 12월3일)", "r": null, "z": ""}, {"s": "naver", "t": "2011.11.19.우선 애초 공지한 송년 캠프 날짜가 변경되게된 점 대단히 죄송하다는 말씀을 먼저 올립니다. 등반대장님을 포함한 몇몇 회원님들과 상의한 결과 다오름 송년 캠프일짜를 12월 첫째 주말 (12/3(토)", "r": null, "z": ""}]}, {"name": "비타민캠핑장 수영장", "address": "경기 양주시 백석읍 기산로440번길 110-41", "phone": "", "distance_km": 4.4, "kakao_id": "21174910", "place_url": "http://place.map.kakao.com/21174910", "category": "스포츠,레저 > 수영,수상 > 수영장", "lat": 37.7703934896673, "lng": 126.937915415525, "review_count": 11, "rating": 4.3, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 24.2, "score_detail": {"kakao_rating": 17.2, "kakao_review": 7.0, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 32, "review_previews": [{"s": "naver", "t": "경기도 양주 비타민캠핑장은 기산리의 안고령계곡 상류에 위치한 계곡 물놀이와 수영장 물놀이가 가능한 친환경 캠핑장이다. 계곡 상류에 위치해 조용하고 자연적이다. 특히 캠핑장과 곧바로 연결되는 안고령계곡과 25m 길이의", "r": null, "z": ""}, {"s": "naver", "t": "[양주 비타민캠핑장] 수영장, 계곡 다 있는 서울 근교 캠핑장 후기 | 서울에서 1시간 걸리는 여름 계곡 캠핑장 명....", "r": null, "z": ""}, {"s": "naver", "t": "2024.08.01.\"1인 19,000원으로 즐기는 당일치기 수영장 캠핑\" 보시면, 수영장 주변으로 테이블들이 쭉 있는 거 보이시나여? 양주 수영장 캠핑장인 비타민 캠핑장은 당일치기 이용객들도 받더라고요 성인 기준 ", "r": null, "z": ""}, {"s": "naver", "t": "파주 취사 가능 수영장 & 계곡이 있는 <비타민캠핑장> 강추", "r": null, "z": ""}, {"s": "naver", "t": "비타민 캠핑장은 큰 메인 수영장이 있고요. 수영장 사면이 평상이라 입장료만 지불하면 따로 자릿세는 없답니다. ^^ 일찍 와서 맡는 사람이 임자! 돗자리는 입장권 끊음 대여해주신답니다. 입장료는 어른 8,000원 / ", "r": null, "z": ""}]}, {"name": "비타민펜션&캠핑장", "address": "경기 양주시 백석읍 기산로440번길 110-41", "phone": "010-8259-2366", "distance_km": 4.4, "kakao_id": "20248609", "place_url": "http://place.map.kakao.com/20248609", "category": "여행 > 숙박 > 펜션", "lat": 37.77069180374849, "lng": 126.93809563205694, "review_count": 5, "rating": 2.0, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 73, "naver_blog_review": 7, "crawled_reviews": 7, "camfit_review_count": 0, "has_own_website": true, "own_website_url": "http://비타민계곡식당.jdweb.kr/", "booking_platforms": [], "popularity_score": 35.5, "score_detail": {"kakao_rating": 8.0, "kakao_review": 5.1, "naver_visitor": 12.5, "naver_blog": 5.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 5}, "comp_rank": 14, "review_previews": [{"s": "naver", "t": "양주 비타민펜션&캠핑장 펜션/풀빌라 사진, 가격, 위치소개", "r": null, "z": ""}, {"s": "naver", "t": "지금 100,000원 에 양주 비타민펜션&캠핑장을 예약하세요. 객실별 서비스 및 가격 비교도 쉽고 빠르게 가능해요.", "r": null, "z": ""}, {"s": "naver", "t": "전어에는 나쁜콜레스테롤과 중성지방 수치를 낮춰주는 불포화지방산을 비롯해 칼슘,아연,단백질,철,니아신, 각종 비타민 등 몸에 좋은 영양성분이 다량... 율포에는 또 율포 오토캠핑 리조트 같은 캠핑장과 보성다비치콘도, ", "r": null, "z": ""}, {"s": "naver", "t": "이밖에 강화도는 주말여행 체험학습여행 펜션, 캠핑장, 맛집 등 가볼만한 곳 여행코스가 무수히 많다. 강화도는 30여개 캠핑장이 있다. 가장 인기가 많은... 강화도는 고려산 진달래축제와 함께 세계문화 유산인 고인돌을", "r": null, "z": ""}, {"s": "naver", "t": "31 행사장소 : 경기도 양평군내 농촌체험마을 양평딸기체험축제 행사장 양평딸기체험축제는 비타민이 풍부한 딸기로 건강도 챙기고, 맛있는 딸기맛도... 이밖에 양평 가볼만한 곳은 양평 곤충박물관, 중원계곡, 중미산계곡,", "r": null, "z": ""}]}, {"name": "비타민캠핑장 족구장", "address": "경기 양주시 백석읍 기산로440번길 110-41", "phone": "010-8259-2366", "distance_km": 4.4, "kakao_id": "21174891", "place_url": "http://place.map.kakao.com/21174891", "category": "스포츠,레저 > 스포츠시설", "lat": 37.77046721769386, "lng": 126.93762933323659, "review_count": 11, "rating": 4.3, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": true, "own_website_url": "http://비타민계곡식당.jdweb.kr/", "booking_platforms": [], "popularity_score": 29.2, "score_detail": {"kakao_rating": 17.2, "kakao_review": 7.0, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 5}, "comp_rank": 24, "review_previews": [{"s": "naver", "t": "또한, 비타민캠핑장 내에는 바비큐장과 족구장도 있어 다양한 활동을 즐길 수 있는데요. 주말에 바비큐 파티를 하고 친구들과 족구를 즐기면 정말 재미있을 것 같아요. 여러 시설이 잘 갖춰져 있어 캠핑 초보자도 편하게 이", "r": null, "z": ""}, {"s": "naver", "t": "여름에는 수영장, 그 외에는 족구장으로 쓰고 있는 공간이에요. 큰 아이들이 공을 뻥뻥 차서 주차된 차, 텐트에 맞고, 저희 일행은 머리 맞을 뻔!!!!! 좀 더 안전하게 사용할 수 있도록... 가습기는 필수겠죠~ 또", "r": null, "z": ""}, {"s": "naver", "t": "2024.04.01.비타민 캠핑장은 경기도 양주시 기산리 청정 안고령계곡 상류에 위치하고 있는 친환경 캠핑장으로 계곡물놀이터, 수영장, 족구장등을 갖추고 있어 가족, 친구들과 여행하시며 추억만들기 좋은 곳입니다.", "r": null, "z": ""}, {"s": "naver", "t": "입실 12:00, 퇴실 11:30 배치도를 보면 알겠지만 캠핑장 부지가 꽤 넓고 크고 수영장, 계곡, 족구장 일반 캠핑장도 있지만 당일 피크닉도 되고 지금은 카라반도 가져다 놓은신듯하다. 매너타임은 밤 11시 양주 ", "r": null, "z": ""}, {"s": "naver", "t": "[모두의캠핑 경인] 서울 인천 경기 수도권 실시간 캠핑 정보", "r": null, "z": ""}]}, {"name": "비타민캠핑장 안내실", "address": "경기 양주시 백석읍 기산리 369", "phone": "", "distance_km": 4.4, "kakao_id": "21174931", "place_url": "http://place.map.kakao.com/21174931", "category": "여행 > 관광지부속시설", "lat": 37.7707142711611, "lng": 126.937987787724, "review_count": 196, "rating": 4.2, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 31.7, "score_detail": {"kakao_rating": 16.8, "kakao_review": 14.9, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 20, "review_previews": [{"s": "naver", "t": "경기도 양주에 위치한 조그마한 비타민 캠핑장 안내실 겸 매점 정중앙에 위치해 있고요. 바로 옆이 화장실인데요 크기는 작아요 그렇지만 비타민 캠핑장 계곡물이 좋습니다. 이렇게 가족들끼리 놀 수 있는 수영장도 있는데요 ", "r": null, "z": ""}, {"s": "naver", "t": "들어오다보면 비타민캠핑장에 도착하면 우선 매점 겸 안내실을 방문하여 체크인을 진행하면 된다 캠핑장 사모님이 부지런히 다니시고 말씀을 잘 걸어주시기에 체크인은 그리 어렵지 않다 매점에는 어느정도 물품들이 갖춰져 있지만", "r": null, "z": ""}, {"s": "naver", "t": "경기도 양주 비타민캠핑장은 기산리의 안고령계곡 상류에 위치한 계곡 물놀이와 수영장 물놀이가 가능한 친환경 캠핑장이다. 계곡 상류에 위치해 조용하고 자연적이다. 특히 캠핑장과 곧바로 연결되는 안고령계곡과 25m 길이의", "r": null, "z": ""}, {"s": "naver", "t": "비타민캠핑장 (2026) - 경기도 양주시 - 가볼만한곳", "r": null, "z": ""}, {"s": "naver", "t": "1주 전경기도 양주 비타민캠핑장은 기산리의 안고령계곡 상류에 위치한 계곡 물놀이와 수영장 물놀이가 가능한 친환경 캠핑장이다. 계곡 상류에 위치해 조용하고 자연적이다. 특히 캠핑장과 곧바로 연결되는 안고령계곡과 25m", "r": null, "z": ""}]}, {"name": "비타민캠핑장 화장실", "address": "경기 양주시 백석읍 기산로440번길 110-41", "phone": "", "distance_km": 4.4, "kakao_id": "21174930", "place_url": "http://place.map.kakao.com/21174930", "category": "가정,생활 > 화장실", "lat": 37.7708403989728, "lng": 126.937974062292, "review_count": 198, "rating": 3.1, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 27.4, "score_detail": {"kakao_rating": 12.4, "kakao_review": 15.0, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 31, "review_previews": [{"s": "naver", "t": "서울근교 수영장있는 비타민 캠핑장! 맑은 계곡이 예술인 비타민 펜션은 덤", "r": null, "z": ""}, {"s": "naver", "t": "서울근교+맑은 공기+대형 수영장 비타민 캠핑장만의 최강 조합인듯 싶어요. 딱봐도 신식 건물로 보이는 화장실! 비타민 캠핑장 화장실은 새로 신축되어 만족도가 굉장히 높은 편인데요. 캠핑장 입구에 위치하고있어 이동도 편", "r": null, "z": ""}, {"s": "naver", "t": "캠핑장 이름은 비타민캠핑장! 관리실에서 체크인을 하고, 사이트를 안내 받았어요. 사장님이 남은 자리를 소개해주셨고, 그 중에서 선택해서, 텐트를 피칭했어요. 여름엔 수영장을... 개수장은 캠핑장 관리동을 바라보며, ", "r": null, "z": ""}, {"s": "naver", "t": "편의시설은 매점, 화장실과 샤워실, 개수대, 족구장 등이 마련되어 있고 24시간 온수가 제공된다. 매점 옆 화장실보다는 최근에 지어진 펜션의 공동화장실과 공동샤워장을 이용하는 것이 쾌적하다. 여름철 당일 피크닉 장소", "r": null, "z": ""}, {"s": "naver", "t": "[비타민캠핑장] 경기도 양주시 낭만 캠핑 | 수영장 계곡 | 솔직후기", "r": null, "z": ""}]}, {"name": "송천펜션", "address": "경기 양주시 백석읍 기산로440번길 74-19", "phone": "031-871-3563", "distance_km": 4.7, "kakao_id": "11667454", "place_url": "http://place.map.kakao.com/11667454", "category": "여행 > 숙박 > 펜션", "lat": 37.7736513968298, "lng": 126.937953553232, "review_count": 7, "rating": 4.3, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": 4.29, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 15, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 31.7, "score_detail": {"kakao_rating": 17.2, "kakao_review": 5.9, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 8.6, "camfit_review": 0.0, "channel": 0}, "comp_rank": 21, "review_previews": [{"s": "naver", "t": "수수료 없는 호텔예약사이트, 최저가로 간편하게 예약하자! 송천펜션 아고다", "r": null, "z": ""}, {"s": "naver", "t": "송천펜션, 실시간 확정 예약, 안심 환불, 매 월 진행되는 더블혜택 단독 특가 신규 와우회원 최대 2만3천원 쿠폰팩+5% 추가적립 혜택! 여행도 이제 쿠팡에서!", "r": null, "z": ""}, {"s": "naver", "t": "전주 여행도 우리집처럼, 송천펜션 안심결제 & 24시간 고객지원! 전용 테라스와 바비큐 그릴이 제공되는 숙소를 예약하세요.", "r": null, "z": ""}, {"s": "naver", "t": "안심하고 예약하는 NOL! 숙소 사유로 취소시 전액 환불해드려요! 송천펜션", "r": null, "z": ""}, {"s": "naver", "t": "마장호수출렁다리, 청정계곡, 풋살장, 어린이놀이시설, 매점, 개별바베큐 간단한안주류 , 하절기수영장", "r": null, "z": ""}]}, {"name": "여우별꽃", "address": "경기 양주시 백석읍 기산로 614", "phone": "031-871-6699", "distance_km": 4.7, "kakao_id": "963170715", "place_url": "http://place.map.kakao.com/963170715", "category": "여행 > 숙박 > 야영,캠핑장 > 카라반", "lat": 37.780765770433, "lng": 126.954557268782, "review_count": 2, "rating": 4.5, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 14, "naver_blog_review": 4, "crawled_reviews": 13, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 32.8, "score_detail": {"kakao_rating": 18.0, "kakao_review": 3.1, "naver_visitor": 7.8, "naver_blog": 3.9, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 17, "review_previews": [{"s": "naver", "t": "카라반, 개별바비큐, 워터슬라이드, 수영장, 공용시설, 개별화장실, 개별샤워실", "r": null, "z": ""}, {"s": "naver", "t": "아이가 차 안 침대에서 자고 싶대서 급하게 카라반을 찾아 여우별 꽃 캠핑장에 다녀왔어요! 😄​사장님과 따님이 정말 친절하게 세세하게 챙겨주셔서 감동했습니다. 시설도 전반적으로 깨끗해서 머무는 동안 불편함이 없었어요.", "r": null, "z": ""}, {"s": "naver", "t": "사장님 내외분 친절하시고 카라반 너무 깨끗하고 바베큐랑 불멍하기도 좋고 잘 쉬가 갑니다!!", "r": null, "z": ""}, {"s": "naver", "t": "2023.08.06.양주 여우별꽃 평상자리 이용꿀팁 ! 평상이 총 7개라 7팀만 이용 가능해서 정말 프라이빗해요 ! 여우 A, B, C, D : 영유아용 미니풀장, 돌고래 수영장, 관리실 및 매점, 화장실 샤워실 앞", "r": null, "z": ""}, {"s": "naver", "t": "아이와함께_나들이 : 당일치기 카라반 바베큐캠핑 [여우별꽃캠핑장]", "r": null, "z": ""}]}, {"name": "양주송천캠핑장", "address": "경기 양주시 백석읍 기산로440번길 74-20", "phone": "031-855-9005", "distance_km": 4.7, "kakao_id": "26805413", "place_url": "http://place.map.kakao.com/26805413", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.77438031464552, "lng": 126.93802558807175, "review_count": 196, "rating": 4.2, "camfit_matched": true, "camfit_id": "61dea91e99a56a001eba71c9", "camfit_name": "양주송천캠핑장", "site_count": 56, "prices": [], "min_price": null, "max_price": null, "policy": "모든 애견동반 불가합니다!\n\n----- 1박기준 캠핑장 -------\n1. ﻿​1사이트씩만 예약 가능 2팀 각각 예약 \n3팀 이상 소등고지 후 예약가능합니다.(단체캠은 받지 않아요)\n\n동일예약자 미입금처리 자동취소 경우 캠핑장에서 책임지지 않습니다. 입금 후 예약완료 문자를 꼭 확인하세요. \n\n1차량 4인 기준으로 성인만 3인이상은 예약불가합니다-직계가족일 경우 캠핑장에 문의하세요.\n\n2. 입촌 오후1시 이후~ 퇴촌 정오12시-시간엄수 일찍오셔도 입촌불가합니다.\n캠핑장 내 모든시설은 입촌 후 퇴촌전까지만 이용가능합니다.\n\n3. 하루전, 당일 양도불가/ 재양도불가\n\n4. 매너타임 밤 10시 소등 11시 고성방가 금지 - 소등시간 민원으로 인한 개수대 및 샤워실 사용은 밤10시 30분까지!!!\n\n5. 캠핑카 카라반 입장불가\n트레일러 파쇄석만 이용가능/추가금 발생합니다\n\n6. 고전력가전 사용불가\n기본전력 제공됩니다\n\n모든 고전력 난방기구 사용을 금지합니다. \n(난방기구는 추가금 주셔도 사용불가합니다.)\n예: 전기스토브, 전기난로, 캡슐커피머신, 전자렌지, 전기그릴, 헤어드라이 등의 800w이상 고전력가전\n\n600w의 추가전력 필요시 1박당 추가금 5천원\n예약하실 때 선택하시고 결제 바랍니다.\n\n- 데크 위 데크전용팩 사용하며 단조팩 이용불가합니다.\n 데크 둘레 밖으로 팩설치는 1m 이내만 가능\n\n- 파쇄석 사이트 안에 차량주차 하며 라인 준수해주세요.\n\n안정된 캠핑장 조성을 위해 노력하겠습니다. 감사합니다", "facilities": ["showerRoom", "store", "playground", "swimmingPool", "trampoline"], "camfit_address": "", "camfit_description": "마장저수지와 안고령계곡이 있는 양주송천캠핑장에 오신것을 환영합니다\n", "naver_rating": null, "naver_visitor_review": 26, "naver_blog_review": 192, "crawled_reviews": 45, "camfit_review_count": 529, "has_own_website": false, "own_website_url": null, "booking_platforms": ["camfit"], "popularity_score": 74.0, "score_detail": {"kakao_rating": 16.8, "kakao_review": 14.9, "naver_visitor": 9.5, "naver_blog": 12.7, "naver_rating": 0, "camfit_review": 15, "channel": 5}, "comp_rank": 1, "review_previews": [{"s": "camfit", "t": "재미나게  잘 쉬었다 욌어요 시설은 좀  낙후됐어도  좋았어요", "r": null, "z": "파쇄석"}, {"s": "camfit", "t": "아이들과 재미있게 잘놀고 왔습니다~~", "r": null, "z": "데크"}, {"s": "camfit", "t": "약간 시설이  노후였지만  나름  즐거웠고 좋았어요", "r": null, "z": "파쇄석"}, {"s": "camfit", "t": "조금 큰 학생들이 수영장 이용시에 물총을 매너없이 뿌려대는것 빼곤 4살 아이가 튜브타고 놀기엔 좋았어요 혼자서 놀수있는 깊이는 아니라서 꼭 같이 있어야하는건..좀 피곤..하지만..^^ \r\n개인 테이블에서 버너사용도 ", "r": null, "z": "계곡수영장 피크닉"}, {"s": "camfit", "t": "비로앞 계곡물 흐르는 소리는 좋아요 근데 앞에 흰 건물이 뷰를 좀 해치긴합니다. 대체적으로 좋았어요~", "r": null, "z": "파쇄석"}, {"s": "camfit", "t": "자주 오게되네요. 계곡 소리가 너무 좋아요!", "r": null, "z": "파쇄석"}, {"s": "camfit", "t": "가을캠핑 너무 좋았습니다!!\r\n단풍이 예술🍁🍂", "r": null, "z": "파쇄석"}, {"s": "camfit", "t": "4-5회 방문했는데 집과 접근성이 좋고 이용이 편리해서 자주 이용하였습니다.", "r": null, "z": "데크"}, {"s": "camfit", "t": "계곡왔다갔다 할수있어서 좋았고 실내 놀이터에서 애들이 재밌게 잘놀았어요~", "r": null, "z": "파쇄석"}, {"s": "camfit", "t": "수영장크고 미끄럼 잼나요\r\n사람이 넘 많아서 좀...", "r": null, "z": "방갈로(취사공간o)"}, {"s": "camfit", "t": "아르보리아는 항상 좋은 추억을 만들어 준 곳이에요!", "r": null, "z": ""}, {"s": "camfit", "t": "사장님이 친절하시고. 설명이 자세하셔서 편하게 잘놀다갑니다.\r\n충주로 다시 오게된다면 꼭 다시 여기로오고싶네요.", "r": null, "z": ""}]}, {"name": "데이캠파크 고양점", "address": "경기 고양시 덕양구 호국로1907번길 202", "phone": "", "distance_km": 4.8, "kakao_id": "1308470478", "place_url": "http://place.map.kakao.com/1308470478", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.71871158242945, "lng": 126.92321494361131, "review_count": 3, "rating": 4.3, "camfit_matched": false, "camfit_id": null, "site_count": null, "prices": null, "min_price": null, "max_price": null, "policy": null, "facilities": null, "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 7, "camfit_review_count": 0, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 21.1, "score_detail": {"kakao_rating": 17.2, "kakao_review": 3.9, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 0.0, "channel": 0}, "comp_rank": 39, "review_previews": [{"s": "naver", "t": "서울근교 당일치기 캠핑체험 텐트완비! 부담없이 떠나는 테마파크형 놀이터 OPEN", "r": null, "z": ""}, {"s": "naver", "t": "경기도 당일치기 캠핑장 데이캠파크 고양점 실내 놀이터 준비물 배달 주차 총정리", "r": null, "z": ""}, {"s": "naver", "t": "2025.09.26.그래서 저희 가족은 경기도 당일치기 캠핑장을 찾다가 고양에 위치한 데이캠파크 고양점을 다녀왔습니다. 실내 놀이터와 야외 시설이 모두 갖춰져 있어 날씨 걱정 없이 즐길 수 있었고, 아이가 뛰어노는 ", "r": null, "z": ""}, {"s": "naver", "t": "경기도 키즈 캠핑장 추천 실내 야외 놀이터 데이캠파크 고양점", "r": null, "z": ""}, {"s": "naver", "t": "2025.09.23.[데이캠파크 고양점] 경기도 키즈 캠핑장 추천 놀거리 가득 실내 야외 놀이터 안녕하세요~ 날씨가 제법 선선해져서 가족나들이 혹은 여행 가기에 너무 좋은 날씨인데요~ 지난 주말 저희 가족도 당일치기", "r": null, "z": ""}]}, {"name": "양주산막골캠핑장", "address": "경기 양주시 백석읍 기산로 414-20", "phone": "031-871-0058", "distance_km": 4.8, "kakao_id": "19825006", "place_url": "http://place.map.kakao.com/19825006", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7749485685464, "lng": 126.937543843595, "review_count": 8, "rating": 1.5, "camfit_matched": true, "camfit_id": "634924fadd1593001fe41028", "camfit_name": "양주산막골캠핑장", "site_count": 49, "prices": [], "min_price": null, "max_price": null, "policy": "[양주산막골캠핑장 운영정책]\n\n ❤️ 이용요금 부과 기준안내\n- 이용요금 : 1박 _ 50,000원 - 전기 기본 제공\n- 일반 승용차 및 RV차량 1대 _ 4인기준(인원 및 텐트규격)\n- 캠핑카,트레일러 입장을 금지합니다.\n- 추가차량 및 인원, 텐트 규격 초과 시 추가요금을 부담하셔야 합니다.\n- 텐트규격이 크신 경우 사전에 협의 바랍니다.\n- 일반 야영(텐트 포함) : 상기 가격과 동일합니다.\n- 전력소모량이 과다한 전열기 사용 시 퇴촌(핫플레이트, 전열 난방기 등)\n\n ❤️ 부대시설\n- 캠핑장, 화장실, 간이매점(관리실), 샤워장, 개수대, 계곡물가자리, 솔숲쉼터 등\n청정 안고령계곡에서 마음껏 쉼을 즐길 수 있습니다.\n\n ❤️ 민박안내\n- 민박형 통나무 쉼터(4개) _ 4인 \n- 방갈로형 항아리민박(5개) _ 2인\n\n ❤️ 예약관련안내\n- 예약자명의와 입금자명의를 동일인으로 하여 주시고 다르실 경우에는 반드시 연락주세요.\n\n ❤️환불규정 (오후 1시 기준)\n- 예약 10일전 100% 환불\n- 예약 7일~9일전 80% 환불\n- 예약 5일~6일전 60% 환불\n- 예약 3일~4일전 40% 환불\n- 예약 1일~2일전 10% 환불\n- 예약 당일 환불 불가\n\n_연기신청은 불가합니다.\n\n ❤️이용 시 유의사항\n- 1. 이용시간은 당일 오후 1시부터 정오까지입니다.\n* 초과이용요금 :  3시간이후 1일요금을 징수합니다.\n* 애완견 동반 캠핑은 금지합니다.\n- 2, 차량출입시 오후 11시 ~ 익일 7시까지는 가급적 차량운행을 자제해주세요.\n- 3. 불꽃놀이들의 화재 위험성이 있는 경우 절대 불가합니다.\n- 4. 오후 11시 이후 지나친 음주와 고성방가등은 자제해 주시면 고맙겠습니다.\n- 5. 이용객이 고의 또는 부주의로 시설물을 파손시에는 배상하셔야 합니다.\n- 6. 이용객 과실에 의한 사고에 대해서는 배상하지 않습니다.\n\n ❤️ 시설 간략 정보\n- 운영기간 : 365일 (휴일에는 사전에 공지합니다.)\n- 개수대 : 사용가능\n- 샤워실 : 남,여 별도 시설\n- 온    수 : 동절기\n- 간이매점 : 운영중\n- 숯 및 바베큐 그릴 등 : 판매\n- 물놀이, 계곡 : 가능\n- 전    기 : 사용가능\n- 캠핑카 : 성수기 이용 불가 (동절기 가능)\n- 낚    시 : 주변 기산저수지, 마장저수지 가능", "facilities": ["showerRoom", "store", "playground", "trampoline"], "camfit_address": "", "camfit_description": "청정 안고령계곡이 있는 쉼터 양주산막골캠핑장에 오신것을 환영합니다^^", "naver_rating": null, "naver_visitor_review": 3, "naver_blog_review": 245, "crawled_reviews": 42, "camfit_review_count": 80, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 43.8, "score_detail": {"kakao_rating": 6.0, "kakao_review": 6.2, "naver_visitor": 4.0, "naver_blog": 13.3, "naver_rating": 0, "camfit_review": 14.3, "channel": 0}, "comp_rank": 8, "review_previews": [{"s": "camfit", "t": "시설좋고 댐뷰 최고입니다 아이들놀게없어 가족단위가 적어조용하구요 옆에 공원이조성되어있어 산책하기도 좋습니다 재방문 100% 입니다", "r": null, "z": "선착순존"}, {"s": "camfit", "t": "개미…심해도 너무 심해요\r\n무서울정도로 많고 심각해요 ㅜㅜ", "r": null, "z": "선착순존"}, {"s": "camfit", "t": "첫 캠핑장으로 급하게 가게 되어\r\n선착순으로 예약 가능한곳이 자리가 있어서\r\n가게 되었어요ㅎㅎ \r\n일찍 가서 그늘에 자리 잡고 트램폴린  근처라\r\n왔다갔다 하기도 좋았어요 화분옆이라\r\n그런지 응가냄새가 가끔 났지만 ", "r": null, "z": "선착순존"}, {"s": "camfit", "t": "그늘도 없고 너무 덥고 난민촌 같고 더럽고 따뜻한 물도 잘 안나오고 완전 비추임", "r": null, "z": "선착순존"}, {"s": "camfit", "t": ".............", "r": null, "z": "선착순존"}, {"s": "camfit", "t": "캠핑장은 좋은데 부대시설이 아쉬웠어요.\r\n화장실 바닥 청소해주시면 좋을 것 같아요\r\n따뜻한 물도 너무 안나와서 냉수샤워 할 수 밖에 없었어요", "r": null, "z": "선착순존"}, {"s": "camfit", "t": "장점\r\nㅡ아이들 방방이있고, 바로옆 계곡이있음\r\n\r\n단점\r\nㅡ사이트수에 비해 턱없이 부족한 화장실칸. 2칸에 뒤에 1칸 더있음\r\nㅡ온수는..... 진짜 거의 안나온다고보면됨. 2박하면서 금요일4시경, 일요일 아침9시", "r": null, "z": "선착순존"}, {"s": "camfit", "t": "화장실과 개수대가 많이 부족해보여요.\r\n사이트 수에 비해 너무 열악했어요.\r\n아 뜨거운물이 아무때나 나오는게 아니라...\r\n진짜 꼭두새벽에 가서 씻었어요 ㅜㅜ \r\n애들있는 가족캠은 괜찮은데 쉬고싶어서 캠핑 하시는분들", "r": null, "z": "선착순존"}, {"s": "camfit", "t": "커플이라면 절대가지마세요 2박동안 너무집에가고싶었습니다. 캠핑 7년을했지만 최악의캠핑장입니다.\r\n일단 95%가 가족단위 캠핑장이구요 말그대로 떼캠 난민캠 입니다. 그냥 말그대로 바로옆에 사이트 붙어있어서 말소리발소리", "r": null, "z": "선착순존"}, {"s": "camfit", "t": "좋은 자리에서 즐겁게 2박했어요. \r\n주변에 카페도 많고 마장호수도 산책하기 좋아요^^", "r": null, "z": "선착순존"}, {"s": "camfit", "t": "아르보리아는 항상 좋은 추억을 만들어 준 곳이에요!", "r": null, "z": ""}, {"s": "camfit", "t": "사장님이 친절하시고. 설명이 자세하셔서 편하게 잘놀다갑니다.\r\n충주로 다시 오게된다면 꼭 다시 여기로오고싶네요.", "r": null, "z": ""}]}, {"name": "일영무두리캠핑장", "address": "경기 양주시 장흥면 유원지로 176-77", "phone": "031-855-6102", "distance_km": 4.8, "kakao_id": "21036746", "place_url": "http://place.map.kakao.com/21036746", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.7004501581356, "lng": 126.94686383763, "review_count": 8, "rating": 3.8, "camfit_matched": true, "camfit_id": "65839941d5d9a5001dff2c50", "camfit_name": "일영무두리캠핑장", "site_count": 19, "prices": [], "min_price": null, "max_price": null, "policy": "가족단위만예약받습니다.\n(한사이트 성인(부부) 한가정자녀수 2명기준(다둥이무료  차량1대)   성인자녀는 추가비용 발생 \n조부모님은 숙박 가능\n\n자매, 형제, 지인 숙박금지    단 조부모님 숙박시 형제 자매도 숙박은 가능합니다.\n\n\n입촌은 저녁9시전 까지 해주시면 감사하겠습니다.\n\n(🐶애견반입금지,동창모임,동호회,3팀이상 단체캠핑은 각자 예약하셔도  안됩니다)\n\n매너타임 밤11시 지키실분들만 예약해주세요\n\n👨‍👩‍👧‍👦 다자녀가족은  (의료보험증 or다둥이카드or 등본사진 ) 중에 한개 보여주시면 추가요금 없습니다\n\n🏕공지사항확인바랍니다!♡! (법정규정 600w와트이내 사용)\n캠핑장에서 안되는 전기용품  \n전기후라이펜, 자이글, 에어프라이어,전기밥솥,전기히터 , 원적외선히터,전기주전자등 사용금지해 주세요 \n\n☝폭죽(스파클라),풍등 캠핑장에서  이용 안돼요\n      캠핑장에서 위험해요\n     💢오후9 시 이후 음악은 꺼주세요\n\n✌방문객&방문차량 금지 \n    (예약할때  미리등록하신 방문객 입촌 가능)\n\n👌새벽까지 술 드시고 떠드실 분들  오지마세요 \n밤 10시-아침 7시 차량통제\n위 내용 인지후 예약부탁드립니다\n\n💥어기실시 조용히 블랙 걸겠습니다\n     \n     일영무두리캠핑장 \n     경기도 양주시 장흥면 삼상리    28-14번지 \n      감사합니다 🌹", "facilities": ["showerRoom", "bbq", "store", "swimmingPool", "playground"], "camfit_address": "", "camfit_description": "사랑하는 사람들과 함께 와 보고 싶은 곳,\n일영무두리캠핑장을 찾아 주셔서 감사합니다.\n무두리는 마을이름으로 물이 둥글게 돌아가는 곳,\n\"물돌이\"에 어원이 있으며 일영무두리캠핑장은 산과 물이\n둥글게 감싸는 안쪽에 자리하고 있습니다.\n어머니의 품처럼 아늑한 곳..... 포근한 자연의 품에서 몸과\n마음이 힐링되는 행복한 시간 보내시기 바랍니다.", "naver_rating": null, "naver_visitor_review": 0, "naver_blog_review": 0, "crawled_reviews": 44, "camfit_review_count": 121, "has_own_website": false, "own_website_url": null, "booking_platforms": [], "popularity_score": 36.4, "score_detail": {"kakao_rating": 15.2, "kakao_review": 6.2, "naver_visitor": 0.0, "naver_blog": 0.0, "naver_rating": 0, "camfit_review": 15, "channel": 0}, "comp_rank": 11, "review_previews": [{"s": "camfit", "t": "올해 첫 캠핑했어요~~ 거리가 가까워서 다녀왔습니다\r\n깨끗한 풀타프존이라 너무 좋았어요 \r\n단점은 바닥이 아직 정리가 덜 되어서 진흙? 이많아서 불편햇어요", "r": null, "z": "풀타프존"}, {"s": "camfit", "t": "편안하게 쉬다가 왔습니다\r\n사장님 친절하시고 조용히 힐링했습니다\r\n재방문의사 있습니다", "r": null, "z": "풀타프존"}, {"s": "camfit", "t": "여름만 되면 이만한 캠핑장이 없죠!  \r\n데크도 크고 수영장도 놀기좋고~!!", "r": null, "z": "풀타프존"}, {"s": "camfit", "t": "할로윈 행사 재미있었어요 ㅎㅎ\r\n캠장님이 준비해주신 간식으로 아이들 모두 행복해 했습니다.\r\n언제나 정감가는 캠핑장입니다 ^^", "r": null, "z": "풀타프존"}, {"s": "camfit", "t": "타프덕분에     비와도    잘놀았습니다.", "r": null, "z": "풀타프존"}, {"s": "camfit", "t": "이번엔 첫날 비가 왔지만 빗소리 들으며 운치있는 시간을 보낼 수 있었어요~^^ 아이와 힐링의 시간을 보낼 수 있어서\r\n너무 좋았답니다~ 할로윈을 맞이해 이곳저곳 아이들이 좋아할만 소품들로 세팅도 해주셨어요~무엇보다 ", "r": null, "z": "풀타프존"}, {"s": "camfit", "t": "주말에 서울 약속이있어서 급하게알아본곳인데 너무 만족스러웠습니다~\r\n금욜에 반차쓰고 갔더니 선착순 입실이라 제일 구석자리였지만 오히려 전 좋았어요ㅎㅎ\r\n타프에 데크 다 이렇게 큰사이즈는 처음봤고, 비오는데 하나도 젖", "r": null, "z": "풀타프존"}, {"s": "camfit", "t": "수영장 운영 종료돼서 걱정했는데\r\n아이랑 놀러가기 최고네요\r\n\r\n바구니 그네 타고 앞에 공릉천인가요? 돌멩이 던지고 낙엽 주워다가 화롯대에 던져넣기 100회 정도 한 것 같아요\r\n\r\n짚라인 타고싶었는데 우리 애들타면", "r": null, "z": "풀타프존"}, {"s": "camfit", "t": "행복한 캠핑했습니다~ 다음에\r\n기회되면 꼭 다시 방문하고 싶습니다~", "r": null, "z": "풀타프존"}, {"s": "camfit", "t": "짧게 머무르기 좋았어요 방방이,그네타기,다슬기도 잡았어요", "r": null, "z": "풀타프존"}, {"s": "camfit", "t": "아르보리아는 항상 좋은 추억을 만들어 준 곳이에요!", "r": null, "z": ""}, {"s": "camfit", "t": "사장님이 친절하시고. 설명이 자세하셔서 편하게 잘놀다갑니다.\r\n충주로 다시 오게된다면 꼭 다시 여기로오고싶네요.", "r": null, "z": ""}]}, {"name": "하늘캠핑장", "address": "경기 양주시 백석읍 양주산성로737번길 114", "phone": "010-4189-2004", "distance_km": 4.9, "kakao_id": "726379335", "place_url": "http://place.map.kakao.com/726379335", "category": "여행 > 숙박 > 야영,캠핑장", "lat": 37.78444715128735, "lng": 126.96849774289554, "review_count": 11, "rating": 4.6, "camfit_matched": true, "camfit_id": "6998009455b416001d04b1b0", "camfit_name": "연천 하늘아래 캠핑장", "site_count": 20, "prices": [], "min_price": null, "max_price": null, "policy": "\n※ 공지를 숙지하지 않고 일어난 모든 일에는 책임지지 않습니다. 공지사항 필독 후 예약하시길 바랍니다.\n\n✔️ 입실 시간 : 오후 1시 ~오후 8시 (이후 절대 입실 불가)\n\n✔️ 퇴실 시간 : 오전 11시 00분\n\n비수기 시즌 입, 퇴실 시간은 공지사항 확인 부탁 드립니다!\n\n✔️ 캠핑카, 카라반, 텐트 트레일러, 소형짐 트레일러 는 불가합니다.스타렉스등의개조차량은 캠지기와 사전 연락 후 가능 여부 확인해주세요!\n\n✔️ 공용 냉장고는 개수대에서 사용 가능합니다.\n\n✔️ 매너 타임 : 오후 11시~오전 7시\n\n* 매너 타임을 굉장히 중요하게 생각합니다. 매너 타임 이후에는 시끄럽게 돌아다니거나 다른 사이트에 방해가 되는 행동은 불가합니다.*\n\n-매너 타임 규정 위반 시(민원 2번) 환불 없이 퇴실 조치 됩니다- \n\n✔️ 블루투스 스피커 포함 모든 스피커는 사용 불가합니다. (음악 감상 및 영상 시청은 꼭 이어폰 착용)\n\n※ 요금 안내\n\n- 연박 할인 있습니다. (1만원)\n\n- 기본 요금은 사이트와 기준 인원에 대한 요금입니다.\n\n- 기준 인원 초과 시 추가 요금이 발생됩니다. (옵션에서 1박 당 추가)\n\n- 추가 차량 1대 당 추가 요금 10000원 있습니다. (숙박 기간 중 1회만 현장 결제)\n\n- 장작 판매합니다 (10KG 1박스 8000원 / 2박스 구매 시 15000원)\n\n※ 이용 인원 안내\n\n1. 기준 인원을 제외한 추가 인원은 추가 요금이 발생됩니다.\n\n2. 총 인원은 최대 인원을 초과할 수 없습니다. (최대 인원 초과로 인한 입실 거부 시 환불은 절대 불가합니다.)\n\n※ 얼리체크인 안내\n\n-전날 이용 캠퍼님이 안계실 경우 가능하며 체크인 하루 전에 캠지기에게 문의주세요.\n\n※ 기타 유의 사항\n\n1. 반려 동물 동반은 불가합니다.\n\n2. 예약 인원 이외의 방문객은 절대 불가 하며 방문객은 추가 인원이 될 수 없습니다.", "facilities": ["swimmingPool", "bbq", "showerRoom", "trampoline"], "camfit_address": "", "camfit_description": "연천 하늘아래 캠핑장\n\n'일상은 지상에 두고 오세요, 여기는 하늘아래입니다.'\n\n산 정상에서 마주하는 연천의 깨끗한 하늘,\n\n구름 위에서 캠핑하는 듯한 특별한 개방감을 선물합니다.\n\n하늘아래 캠핑장만의 특별함\n\n시야 간섭 Zero, 파노라마 뷰 : A구역과 B구역이 4m 높이의 단차로 구성되어 있습니다.\n\n텐트 문을 여는 순간, 연천의 하늘이 쏟아져 들어옵", "naver_rating": null, "naver_visitor_review": 61, "naver_blog_review": 187, "crawled_reviews": 45, "camfit_review_count": 8, "has_own_website": true, "own_website_url": "https://youtu.be/v3VvtR9Wrl8", "booking_platforms": [], "popularity_score": 62.2, "score_detail": {"kakao_rating": 18.4, "kakao_review": 7.0, "naver_visitor": 11.9, "naver_blog": 12.6, "naver_rating": 0, "camfit_review": 7.1, "channel": 5}, "comp_rank": 3, "review_previews": [{"s": "camfit", "t": "후기가 부족해서 참고할 사진 올립니다~ A06 사이트 이용했구요, 주차는 안내 해주시는 대로 A05 데크와의 사이 공간에 주차했습니다. 바로 옆에 A07, A08 , A09 사이트가 나란히 있었습니다. A구역 끝에 ", "r": null, "z": "A구역 (데크+파쇄석)"}, {"s": "camfit", "t": "가는길목이 좁고 언덕이 높아 좀 걱정을 했는데 도착하니 와~~ 뻥뷰에 생각보다 너무 좋아서 만족했어요^^ 무엇보다 개수대화장실 깨끗하고 비품들도 많이 채워져 있어 편리하게 이용할수 있어 좋았어요 궁금한거 여쭤볼때마다", "r": null, "z": "A구역 (데크+파쇄석)"}, {"s": "camfit", "t": "A사이트로 선택했습니다. 뻥 뚫린 경관을 즐기며 캠핑을 할 수 있습니다.\r\n오픈한지 일주일 되셨다고 했는데 정말 그런 듯 화장실, 샤워실 인테리어가 예쁘고 깔끔하며 수건도 있어 좋습니다!\r\n다시 오고 싶은 캠핑장입니", "r": null, "z": "A구역 (데크+파쇄석)"}, {"s": "camfit", "t": "새로 오픈한 캠핑장은 처음 다녀 왔습니다. 사장님 너무 친절하십니다. 편의 시설 깨끗한 건 기본이고 샤워실에 새수건,면봉,드라이기까지 있어 너무 편하게 사용했습니다. 캠핑장 이름처럼 높은 곳에 있어 뷰가 아주 좋았고", "r": null, "z": "B구역 (파쇄석)"}, {"s": "camfit", "t": "연천에 새로생긴 \"하늘아래캠핑장\"\r\n시설도 깔끔하고 앞에 전망이 뚫려있어 속이 시원하네요~\r\n샤워실에 드라이기 칫솔 치약 샴푸 바디워시 수건이 있어요\r\n캠장님이 엄청 꼼꼼하셔서 화장실 하고 개수대 쓰레기정리가 엄청 ", "r": null, "z": "A구역 (데크+파쇄석)"}, {"s": "camfit", "t": "우연히 예약하고 간곳!\r\n화장실에 비데, 손세정제 비치되어있어고.\r\n샤워실에는 수건,일회용 칫솔, 드라이기, 샴푸,바디워시,트리트먼트 등 기존 캠핑장에서는 상상도 못할것들이 구비되어 있어서 놀라웠습니다.  야간에는 ", "r": null, "z": "B구역 (파쇄석)"}, {"s": "camfit", "t": "신생 캠핑장에 다녀왔어요 일단 캠핑장 사장님과 가족분들이 정말 친절하셔서 캠핑 내내 기분이 좋았습니다 ㅎㅎ 그리고 화장실도 청결하고 비데도 설치되어 있고 샤워실은 깔끔하고 공간분리 잘되어있고 여러 위생용품도 구비되어", "r": null, "z": "A구역 (데크+파쇄석)"}, {"s": "camfit", "t": "입구 찾는게 좀 힘들어서 한번 다른 길로 들어가긴했지만 오픈한 지 얼마 안 된 곳이라 그런지 전체적으로 시설이 정말 깔끔하고 정돈이 잘 되어 있어서 너무 좋았습니다 화장실이나 개수대 같은 기본 시설도 청결하게 관리되", "r": null, "z": "A구역 (데크+파쇄석)"}, {"s": "camfit", "t": "아르보리아는 항상 좋은 추억을 만들어 준 곳이에요!", "r": null, "z": ""}, {"s": "camfit", "t": "사장님이 친절하시고. 설명이 자세하셔서 편하게 잘놀다갑니다.\r\n충주로 다시 오게된다면 꼭 다시 여기로오고싶네요.", "r": null, "z": ""}, {"s": "camfit", "t": "반달곰숲아이들이 놀거리많고 동물도보고 좋아요 체험하는것도 많고 굿", "r": null, "z": ""}, {"s": "camfit", "t": "시설 깨끗하고 아이 놀기 좋습니다\r\n즐겨찾는 캠핑장 입니다", "r": null, "z": ""}]}];
+const REVIEWS_DATA = [{"kakao_id": "2074845189", "name": "흐름채 송추바베큐&셀프바베큐장", "place_url": "http://place.map.kakao.com/2074845189", "review_count": 19, "rating": 3.3}, {"kakao_id": "893384468", "name": "양주르 글램핑 캠핑장", "place_url": "http://place.map.kakao.com/893384468", "review_count": 29, "rating": 4.9}, {"kakao_id": "1323313004", "name": "비트윈캠크닉", "place_url": "http://place.map.kakao.com/1323313004", "review_count": 19, "rating": 3.3}, {"kakao_id": "1480270932", "name": "캠프랩", "place_url": "http://place.map.kakao.com/1480270932", "review_count": 8, "rating": 4.3}, {"kakao_id": "318516631", "name": "별을다는아이캠핑장", "place_url": "http://place.map.kakao.com/318516631", "review_count": 2, "rating": 4.8}, {"kakao_id": "26864937", "name": "양주시미술관옆캠핑장 조각구역", "place_url": "http://place.map.kakao.com/26864937", "review_count": 54, "rating": 4.4}, {"kakao_id": "17592585", "name": "장흥수목원 오토캠프장", "place_url": "http://place.map.kakao.com/17592585", "review_count": 19, "rating": 3.3}, {"kakao_id": "708942224", "name": "포근마루 캠핑장", "place_url": "http://place.map.kakao.com/708942224", "review_count": 45, "rating": 3.0}, {"kakao_id": "854447604", "name": "양주시니어클럽 캠핑장 매점", "place_url": "http://place.map.kakao.com/854447604", "review_count": 45, "rating": 3.0}, {"kakao_id": "1134594311", "name": "양주미술관옆 캠핑장 관리실", "place_url": "http://place.map.kakao.com/1134594311", "review_count": 45, "rating": 3.0}, {"kakao_id": "26924717", "name": "양주시 미술관옆 캠핑장", "place_url": "http://place.map.kakao.com/26924717", "review_count": 13, "rating": 4.0}, {"kakao_id": "26864935", "name": "양주시미술관옆캠핑장 달빛구역", "place_url": "http://place.map.kakao.com/26864935", "review_count": 3, "rating": 4.0}, {"kakao_id": "24373203", "name": "청석펜션캠핑장", "place_url": "http://place.map.kakao.com/24373203", "review_count": 54, "rating": 4.4}, {"kakao_id": "26864936", "name": "양주시미술관옆캠핑장 별빛구역", "place_url": "http://place.map.kakao.com/26864936", "review_count": 3, "rating": 3.7}, {"kakao_id": "1501530575", "name": "두리랜드 공룡카라반파크", "place_url": "http://place.map.kakao.com/1501530575", "review_count": 5, "rating": 5.0}, {"kakao_id": "12344434", "name": "개명연수원펜션", "place_url": "http://place.map.kakao.com/12344434", "review_count": 3, "rating": 3.7}, {"kakao_id": "12601850", "name": "자연과우리", "place_url": "http://place.map.kakao.com/12601850", "review_count": 45, "rating": 3.0}, {"kakao_id": "24440901", "name": "로얄 수영장 캠핑장", "place_url": "http://place.map.kakao.com/24440901", "review_count": 1, "rating": 5.0}, {"kakao_id": "838740161", "name": "양주장흥VIP캠핑장", "place_url": "http://place.map.kakao.com/838740161", "review_count": 3, "rating": 1.7}, {"kakao_id": "13099924", "name": "장흥약수펜션", "place_url": "http://place.map.kakao.com/13099924", "review_count": 1, "rating": 5.0}, {"kakao_id": "350424772", "name": "양주잼잼 글램핑", "place_url": "http://place.map.kakao.com/350424772", "review_count": 26, "rating": 4.8}, {"kakao_id": "765620430", "name": "해피니스 캠핑장 행복야영", "place_url": "http://place.map.kakao.com/765620430", "review_count": 8, "rating": 2.9}, {"kakao_id": "1054081112", "name": "써니네캠핑장", "place_url": "http://place.map.kakao.com/1054081112", "review_count": 19, "rating": 3.3}, {"kakao_id": "1955622327", "name": "홍복생태학습장", "place_url": "http://place.map.kakao.com/1955622327", "review_count": 196, "rating": 4.2}, {"kakao_id": "923501128", "name": "일영스타캠핑장", "place_url": "http://place.map.kakao.com/923501128", "review_count": 1, "rating": 5.0}, {"kakao_id": "9261440", "name": "오림피아 캠핑장", "place_url": "http://place.map.kakao.com/9261440", "review_count": 54, "rating": 4.4}, {"kakao_id": "1137647137", "name": "일영모자농원캠핑장", "place_url": "http://place.map.kakao.com/1137647137", "review_count": 5, "rating": 5.0}, {"kakao_id": "930684715", "name": "라온빌리지 양주 애견글램핑", "place_url": "http://place.map.kakao.com/930684715", "review_count": 1, "rating": 4.0}, {"kakao_id": "26630766", "name": "그린랜드", "place_url": "http://place.map.kakao.com/26630766", "review_count": 166, "rating": 4.5}, {"kakao_id": "21286564", "name": "대궐캠핑글램핑펜션", "place_url": "http://place.map.kakao.com/21286564", "review_count": 10, "rating": 2.0}, {"kakao_id": "27584196", "name": "대궐산장식당", "place_url": "http://place.map.kakao.com/27584196", "review_count": 3, "rating": 2.0}, {"kakao_id": "24892209", "name": "대궐힐링파크", "place_url": "http://place.map.kakao.com/24892209", "review_count": 198, "rating": 3.1}, {"kakao_id": "1368965327", "name": "해일캠프촌", "place_url": "http://place.map.kakao.com/1368965327", "review_count": 54, "rating": 4.4}, {"kakao_id": "21174910", "name": "비타민캠핑장 수영장", "place_url": "http://place.map.kakao.com/21174910", "review_count": 11, "rating": 4.3}, {"kakao_id": "20248609", "name": "비타민펜션&캠핑장", "place_url": "http://place.map.kakao.com/20248609", "review_count": 5, "rating": 2.0}, {"kakao_id": "21174891", "name": "비타민캠핑장 족구장", "place_url": "http://place.map.kakao.com/21174891", "review_count": 11, "rating": 4.3}, {"kakao_id": "21174931", "name": "비타민캠핑장 안내실", "place_url": "http://place.map.kakao.com/21174931", "review_count": 196, "rating": 4.2}, {"kakao_id": "21174930", "name": "비타민캠핑장 화장실", "place_url": "http://place.map.kakao.com/21174930", "review_count": 198, "rating": 3.1}, {"kakao_id": "11667454", "name": "송천펜션", "place_url": "http://place.map.kakao.com/11667454", "review_count": 7, "rating": 4.3}, {"kakao_id": "963170715", "name": "여우별꽃", "place_url": "http://place.map.kakao.com/963170715", "review_count": 2, "rating": 4.5}, {"kakao_id": "26805413", "name": "양주송천캠핑장", "place_url": "http://place.map.kakao.com/26805413", "review_count": 196, "rating": 4.2}, {"kakao_id": "1308470478", "name": "데이캠파크 고양점", "place_url": "http://place.map.kakao.com/1308470478", "review_count": 3, "rating": 4.3}, {"kakao_id": "19825006", "name": "양주산막골캠핑장", "place_url": "http://place.map.kakao.com/19825006", "review_count": 8, "rating": 1.5}, {"kakao_id": "21036746", "name": "일영무두리캠핑장", "place_url": "http://place.map.kakao.com/21036746", "review_count": 8, "rating": 3.8}, {"kakao_id": "726379335", "name": "하늘캠핑장", "place_url": "http://place.map.kakao.com/726379335", "review_count": 11, "rating": 4.6}];
+const VIP_CENTER = { lat: 37.7227114753825, lng: 126.949041624216 };
+const VIP_NAME = "양주장흥VIP캠핑장";
+
+// ============ INIT ============
+let map, heatmap, markers = [], infowindow;
+let currentFilter = 'all';
+let popCircles = [];
+let popLabels = [];
+let popVisible = false;
+
+document.addEventListener('DOMContentLoaded', () => {
+  initStats();
+  initTabs();
+  initMap();
+  initSidebar();
+  initPositioning();
+  initSentiment();
+});
+
+// ============ STATS ============
+function initStats() {
+  const ratings = CAMPS_DATA.filter(c => c.rating).map(c => c.rating);
+  const avgR = (ratings.reduce((a,b) => a+b, 0) / ratings.length).toFixed(1);
+  const avgD = (CAMPS_DATA.reduce((a,b) => a + b.distance_km, 0) / CAMPS_DATA.length).toFixed(1);
+  const sorted = [...CAMPS_DATA].sort((a,b) => (b.popularity_score||0) - (a.popularity_score||0));
+  const vipIdx = sorted.findIndex(c => c.name === VIP_NAME) + 1;
+  const vipCamp = CAMPS_DATA.find(c => c.name === VIP_NAME);
+  const vipNaver = vipCamp ? (vipCamp.naver_visitor_review || 0) : 0;
+  document.getElementById('total-count').textContent = CAMPS_DATA.length;
+  document.getElementById('avg-rating').textContent = avgR;
+  document.getElementById('avg-dist').textContent = avgD;
+  document.getElementById('vip-rank').textContent = `${vipIdx}/${CAMPS_DATA.length}`;
+  document.getElementById('vip-naver').textContent = `${vipNaver}`;
+}
+
+// ============ TABS ============
+function initTabs() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.tab).classList.add('active');
+      if (tab.dataset.tab === 'tab-heat' && !heatmap) initHeatmap();
+      if (tab.dataset.tab === 'tab-map') map.relayout();
+    });
+  });
+}
+
+// ============ MAP ============
+function initMap() {
+  map = new kakao.maps.Map(document.getElementById('map'), {
+    center: new kakao.maps.LatLng(VIP_CENTER.lat, VIP_CENTER.lng),
+    level: 7
+  });
+  infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
+
+  // VIP circle ranges
+  [2, 3, 5].forEach((r, i) => {
+    new kakao.maps.Circle({
+      map, center: new kakao.maps.LatLng(VIP_CENTER.lat, VIP_CENTER.lng),
+      radius: r * 1000,
+      strokeWeight: 1, strokeColor: '#38bdf8', strokeOpacity: 0.3 + i * 0.1,
+      fillColor: '#38bdf8', fillOpacity: 0.02
+    });
+  });
+
+  CAMPS_DATA.forEach((camp, i) => {
+    const isVip = camp.name === VIP_NAME;
+    const markerImg = new kakao.maps.MarkerImage(
+      isVip
+        ? 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png'
+        : 'https://t1.daumcdn.net/localimg/localimages/07/2018/pc/img/marker_spot.png',
+      new kakao.maps.Size(isVip ? 24 : 20, isVip ? 35 : 28)
+    );
+    const marker = new kakao.maps.Marker({
+      map, position: new kakao.maps.LatLng(camp.lat, camp.lng),
+      image: markerImg, title: camp.name
+    });
+    marker.campData = camp;
+    marker.campIndex = i;
+
+    kakao.maps.event.addListener(marker, 'click', () => {
+      const c = camp;
+      const nv = c.naver_visitor_review || 0;
+      const nb = c.naver_blog_review || 0;
+      const nr = c.naver_rating;
+      const content = `<div class="info-window">
+        <div class="iw-title">${c.name} ${isVip ? '<span class="iw-vip">OUR</span>' : ''}</div>
+        <div class="iw-row iw-rating"><span style="background:#fee500;color:#3c1e1e;padding:1px 4px;border-radius:3px;font-size:9px">카카오</span> ★ ${c.rating || '-'} (리뷰 ${c.review_count || 0}개)</div>
+        <div class="iw-row iw-naver"><span style="background:#2db400;color:#fff;padding:1px 4px;border-radius:3px;font-size:9px">네이버</span> ${nr ? '★ '+nr : ''} 방문자 ${nv} | 블로그 ${nb}</div>
+        ${c.camfit_review_count ? `<div class="iw-row" style="color:#ff6b35"><span style="background:#ff6b35;color:#fff;padding:1px 4px;border-radius:3px;font-size:9px">캠핏</span> 캠핑로그 ${c.camfit_review_count}개</div>` : ''}
+        <div class="iw-row" style="font-size:11px">${c.has_own_website ? '🔗 자체 예약사이트 운영' : '플랫폼 예약만'} ${(c.booking_platforms||[]).join(', ')}</div>
+        <div class="iw-row">${c.address}</div>
+        <div class="iw-row">거리: ${c.distance_km}km ${c.phone ? '| ' + c.phone : ''}</div>
+        ${c.site_count ? `<div class="iw-row">사이트: ${c.site_count}개</div>` : ''}
+        <div class="iw-row iw-score" style="background:${c.popularity_score>=70?'#ef444430;color:#f87171':c.popularity_score>=40?'#78350f30;color:#fbbf24':'#33415530;color:#94a3b8'}">종합 인기도: ${c.popularity_score || 0}점</div>
+        <div class="iw-row"><a href="${c.place_url}" target="_blank" style="color:#2563eb">카카오맵에서 보기</a> ${c.camfit_review_count ? `| <a href="reviews.html" target="_blank" style="color:#ff6b35">캠핏 리뷰 ${c.camfit_review_count}개 보기</a>` : ''}</div>
+      </div>`;
+      infowindow.setContent(content);
+      infowindow.open(map, marker);
+    });
+    markers.push(marker);
+  });
+}
+
+// ============ POPULARITY CIRCLES ============
+function togglePopularity() {
+  popVisible = !popVisible;
+  const btn = document.getElementById('pop-toggle');
+  const legend = document.getElementById('pop-legend');
+
+  if (popVisible) {
+    btn.textContent = '인기도 원 OFF';
+    btn.classList.add('active');
+    legend.classList.add('show');
+
+    if (popCircles.length === 0) {
+      const maxScore = Math.max(...CAMPS_DATA.map(c => c.popularity_score || 0));
+
+      CAMPS_DATA.forEach(c => {
+        const score = c.popularity_score || 0;
+        const isVip = c.name === VIP_NAME;
+        const radius = 80 + (score / Math.max(maxScore, 1)) * 500;
+
+        let fillColor, strokeColor;
+        if (isVip) { fillColor = '#f59e0b'; strokeColor = '#f59e0b'; }
+        else if (score >= 70) { fillColor = '#ef4444'; strokeColor = '#ef4444'; }
+        else if (score >= 40) { fillColor = '#fbbf24'; strokeColor = '#fbbf24'; }
+        else if (score >= 20) { fillColor = '#38bdf8'; strokeColor = '#38bdf8'; }
+        else { fillColor = '#64748b'; strokeColor = '#64748b'; }
+
+        const circle = new kakao.maps.Circle({
+          map: map,
+          center: new kakao.maps.LatLng(c.lat, c.lng),
+          radius: radius,
+          strokeWeight: isVip ? 3 : 1,
+          strokeColor: strokeColor,
+          strokeOpacity: isVip ? 0.9 : 0.5,
+          strokeStyle: isVip ? 'solid' : 'dashed',
+          fillColor: fillColor,
+          fillOpacity: isVip ? 0.3 : 0.15 + (score / maxScore) * 0.2,
+        });
+        popCircles.push(circle);
+
+        const label = new kakao.maps.CustomOverlay({
+          map: map,
+          position: new kakao.maps.LatLng(c.lat, c.lng),
+          content: `<div style="background:${fillColor}dd;color:#fff;padding:2px 6px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap;${isVip?'border:2px solid #fff;font-size:12px;padding:3px 8px;':''}">${score}${isVip?' VIP':''}</div>`,
+          yAnchor: 0.5,
+          zIndex: isVip ? 100 : 1,
+        });
+        popLabels.push(label);
+      });
+    }
+  } else {
+    btn.textContent = '인기도 원 ON';
+    btn.classList.remove('active');
+    legend.classList.remove('show');
+  }
+
+  popCircles.forEach(c => c.setMap(popVisible ? map : null));
+  popLabels.forEach(l => l.setMap(popVisible ? map : null));
+}
+
+function filterMarkers(filter) {
+  markers.forEach(m => {
+    const c = m.campData;
+    let show = true;
+    if (filter === 'near') show = c.distance_km <= 2;
+    else if (filter === 'mid') show = c.distance_km > 2 && c.distance_km <= 4;
+    else if (filter === 'far') show = c.distance_km > 4;
+    else if (filter === 'high') show = (c.rating || 0) >= 4;
+    m.setVisible(show);
+  });
+}
+
+// ============ SIDEBAR ============
+function initSidebar() {
+  renderList(CAMPS_DATA);
+
+  document.getElementById('search-input').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    renderList(CAMPS_DATA.filter(c => c.name.toLowerCase().includes(q) || (c.address||'').toLowerCase().includes(q)));
+  });
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      filterMarkers(currentFilter);
+      let filtered = CAMPS_DATA;
+      if (currentFilter === 'near') filtered = CAMPS_DATA.filter(c => c.distance_km <= 2);
+      else if (currentFilter === 'mid') filtered = CAMPS_DATA.filter(c => c.distance_km > 2 && c.distance_km <= 4);
+      else if (currentFilter === 'far') filtered = CAMPS_DATA.filter(c => c.distance_km > 4);
+      else if (currentFilter === 'high') filtered = CAMPS_DATA.filter(c => (c.rating||0) >= 4);
+      renderList(filtered);
+    });
+  });
+}
+
+function renderList(camps) {
+  const ul = document.getElementById('camp-list');
+  ul.innerHTML = camps.map((c, i) => {
+    const nv = c.naver_visitor_review || 0;
+    const nb = c.naver_blog_review || 0;
+    return `
+    <li class="camp-item ${c.name === VIP_NAME ? 'vip' : ''}" data-idx="${CAMPS_DATA.indexOf(c)}">
+      <div class="name">${c.name}</div>
+      <div class="meta">
+        <span class="rating"><span class="source-badge kakao">카카오</span> ★${c.rating || '-'} (${c.review_count || 0})</span>
+        <span class="naver"><span class="source-badge naver">네이버</span> ${c.naver_rating ? '★'+c.naver_rating+' ' : ''}방문${nv} 블로그${nb}</span>
+        ${c.camfit_review_count ? `<span style="color:#ff6b35"><span class="source-badge" style="background:#ff6b3530;color:#ff6b35">캠핏</span> ${c.camfit_review_count}</span>` : ''}
+        <span>${c.distance_km}km</span>
+        <span style="color:${(c.popularity_score||0)>=70?'#f87171':(c.popularity_score||0)>=40?'#fbbf24':'#64748b'};font-weight:600">인기${c.popularity_score||0}</span>
+        ${c.has_own_website ? '<span style="color:#a78bfa;font-size:10px">자체사이트</span>' : ''}
+        ${(c.booking_platforms||[]).length ? '<span style="color:#64748b;font-size:10px">'+c.booking_platforms.join(',')+'</span>' : ''}
+      </div>
+    </li>`;
+  }).join('');
+
+  ul.querySelectorAll('.camp-item').forEach(li => {
+    li.addEventListener('click', () => {
+      const idx = parseInt(li.dataset.idx);
+      const m = markers[idx];
+      map.setCenter(m.getPosition());
+      map.setLevel(4);
+      kakao.maps.event.trigger(m, 'click');
+      document.querySelector('.tab[data-tab="tab-map"]').click();
+    });
+  });
+}
+
+// ============ POSITIONING CHARTS ============
+function initPositioning() {
+  const vipColor = '#f59e0b';
+  const normalColor = '#38bdf8';
+
+  // 1) Rating vs Distance scatter
+  new Chart(document.getElementById('chart-rating-dist'), {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: '경쟁 캠핑장',
+        data: CAMPS_DATA.filter(c => c.name !== VIP_NAME).map(c => ({ x: c.distance_km, y: c.rating || 0, name: c.name })),
+        backgroundColor: normalColor + '80',
+        borderColor: normalColor, pointRadius: 6
+      }, {
+        label: 'VIP캠핑장',
+        data: CAMPS_DATA.filter(c => c.name === VIP_NAME).map(c => ({ x: c.distance_km, y: c.rating || 0 })),
+        backgroundColor: vipColor, borderColor: vipColor,
+        pointRadius: 12, pointStyle: 'star'
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { x: { title: { display:true, text:'거리(km)', color:'#94a3b8' }, ticks:{color:'#94a3b8'}, grid:{color:'#33415544'} },
+                y: { title: { display:true, text:'평점', color:'#94a3b8' }, min:0, max:5.2, ticks:{color:'#94a3b8'}, grid:{color:'#33415544'} } },
+      plugins: {
+        tooltip: { callbacks: { label: ctx => `${ctx.raw.name || 'VIP캠핑장'}: ★${ctx.raw.y} (${ctx.raw.x}km)` } },
+        legend: { labels: { color:'#94a3b8' } }
+      }
+    }
+  });
+
+  // 2) Review count vs Rating bubble
+  new Chart(document.getElementById('chart-review-rating'), {
+    type: 'bubble',
+    data: {
+      datasets: [{
+        label: '경쟁 캠핑장',
+        data: CAMPS_DATA.filter(c => c.name !== VIP_NAME).map(c => ({ x: c.rating||0, y: c.review_count||0, r: Math.max(4, Math.sqrt(c.review_count||1)*3), name: c.name })),
+        backgroundColor: normalColor + '60', borderColor: normalColor
+      }, {
+        label: 'VIP캠핑장',
+        data: CAMPS_DATA.filter(c => c.name === VIP_NAME).map(c => ({ x: c.rating||0, y: c.review_count||0, r: 14 })),
+        backgroundColor: vipColor + '90', borderColor: vipColor
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { x: { title:{display:true,text:'평점',color:'#94a3b8'}, min:0, max:5.2, ticks:{color:'#94a3b8'}, grid:{color:'#33415544'} },
+                y: { title:{display:true,text:'리뷰수',color:'#94a3b8'}, ticks:{color:'#94a3b8'}, grid:{color:'#33415544'} } },
+      plugins: {
+        tooltip: { callbacks: { label: ctx => `${ctx.raw.name || 'VIP'}: ★${ctx.raw.x} / ${ctx.raw.y}리뷰` } },
+        legend: { labels:{color:'#94a3b8'} }
+      }
+    }
+  });
+
+  // 3) Distance distribution bar
+  const distBins = [
+    { label:'0~1km', camps: CAMPS_DATA.filter(c=>c.distance_km<=1) },
+    { label:'1~2km', camps: CAMPS_DATA.filter(c=>c.distance_km>1&&c.distance_km<=2) },
+    { label:'2~3km', camps: CAMPS_DATA.filter(c=>c.distance_km>2&&c.distance_km<=3) },
+    { label:'3~4km', camps: CAMPS_DATA.filter(c=>c.distance_km>3&&c.distance_km<=4) },
+    { label:'4~5km', camps: CAMPS_DATA.filter(c=>c.distance_km>4) }
+  ];
+  new Chart(document.getElementById('chart-dist-box'), {
+    type: 'bar',
+    data: {
+      labels: distBins.map(b => b.label),
+      datasets: [{
+        label: '캠핑장 수',
+        data: distBins.map(b => b.camps.length),
+        backgroundColor: '#38bdf880', borderColor: '#38bdf8', borderWidth: 1
+      }, {
+        label: '평균 평점',
+        data: distBins.map(b => {
+          const r = b.camps.filter(c=>c.rating).map(c=>c.rating);
+          return r.length ? +(r.reduce((a,b)=>a+b,0)/r.length).toFixed(1) : 0;
+        }),
+        type: 'line', borderColor: '#fbbf24', backgroundColor: '#fbbf2440',
+        yAxisID: 'y1', pointRadius: 5, tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { ticks:{color:'#94a3b8'}, grid:{color:'#33415544'} },
+        y: { title:{display:true,text:'개수',color:'#94a3b8'}, ticks:{color:'#94a3b8'}, grid:{color:'#33415544'} },
+        y1: { position:'right', title:{display:true,text:'평점',color:'#fbbf24'}, min:0, max:5, ticks:{color:'#fbbf24'}, grid:{display:false} }
+      },
+      plugins: { legend:{labels:{color:'#94a3b8'}} }
+    }
+  });
+
+  // 4) Competitiveness matrix
+  const quadrants = [
+    { label:'위협(높은평점+많은리뷰)', camps: CAMPS_DATA.filter(c=>(c.rating||0)>=3.5&&(c.review_count||0)>=20), color:'#ef4444' },
+    { label:'성장중(높은평점+적은리뷰)', camps: CAMPS_DATA.filter(c=>(c.rating||0)>=3.5&&(c.review_count||0)<20), color:'#fbbf24' },
+    { label:'약한경쟁(낮은평점+많은리뷰)', camps: CAMPS_DATA.filter(c=>(c.rating||0)<3.5&&(c.review_count||0)>=20), color:'#38bdf8' },
+    { label:'미약(낮은평점+적은리뷰)', camps: CAMPS_DATA.filter(c=>(c.rating||0)<3.5&&(c.review_count||0)<20), color:'#64748b' }
+  ];
+  new Chart(document.getElementById('chart-matrix'), {
+    type: 'doughnut',
+    data: {
+      labels: quadrants.map(q => `${q.label} (${q.camps.length})`),
+      datasets: [{ data: quadrants.map(q => q.camps.length), backgroundColor: quadrants.map(q => q.color+'cc') }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position:'bottom', labels:{color:'#94a3b8', font:{size:11}} } }
+    }
+  });
+}
+
+// ============ HEATMAP ============
+function initHeatmap() {
+  heatmap = new kakao.maps.Map(document.getElementById('heatmap'), {
+    center: new kakao.maps.LatLng(VIP_CENTER.lat, VIP_CENTER.lng), level: 7
+  });
+
+  // Grid-based density
+  const gridSize = 0.008; // ~800m
+  const grid = {};
+  CAMPS_DATA.forEach(c => {
+    const gx = Math.floor(c.lng / gridSize);
+    const gy = Math.floor(c.lat / gridSize);
+    const key = `${gx},${gy}`;
+    if (!grid[key]) grid[key] = { lat: 0, lng: 0, count: 0, camps: [] };
+    grid[key].lat += c.lat;
+    grid[key].lng += c.lng;
+    grid[key].count++;
+    grid[key].camps.push(c.name);
+  });
+
+  const maxCount = Math.max(...Object.values(grid).map(g => g.count));
+  document.getElementById('heat-info').textContent = `최대 밀집: ${maxCount}개/셀 | 셀 크기: ~800m`;
+
+  Object.values(grid).forEach(g => {
+    const intensity = g.count / maxCount;
+    const lat = g.lat / g.count;
+    const lng = g.lng / g.count;
+    const r = 200 + intensity * 400;
+
+    let color;
+    if (intensity > 0.7) color = '#ef4444';
+    else if (intensity > 0.4) color = '#fbbf24';
+    else color = '#22d3ee';
+
+    const circle = new kakao.maps.Circle({
+      map: heatmap, center: new kakao.maps.LatLng(lat, lng),
+      radius: r, strokeWeight: 0,
+      fillColor: color, fillOpacity: 0.25 + intensity * 0.35
+    });
+
+    const overlay = new kakao.maps.CustomOverlay({
+      map: heatmap, position: new kakao.maps.LatLng(lat, lng),
+      content: `<div style="background:${color}dd;color:#fff;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700">${g.count}</div>`,
+      yAnchor: 0.5
+    });
+  });
+
+  // VIP marker
+  new kakao.maps.Marker({
+    map: heatmap,
+    position: new kakao.maps.LatLng(VIP_CENTER.lat, VIP_CENTER.lng),
+    image: new kakao.maps.MarkerImage(
+      'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
+      new kakao.maps.Size(24, 35)
+    )
+  });
+
+  // Distance circles
+  [1, 2, 3, 5].forEach(r => {
+    new kakao.maps.Circle({
+      map: heatmap, center: new kakao.maps.LatLng(VIP_CENTER.lat, VIP_CENTER.lng),
+      radius: r * 1000, strokeWeight: 1, strokeColor: '#f59e0b', strokeOpacity: 0.4,
+      strokeStyle: 'dash', fillOpacity: 0
+    });
+  });
+}
+
+// ============ SENTIMENT ANALYSIS ============
+function initSentiment() {
+  const posKeywords = ['좋아요','깨끗','친절','넓','뷰','경치','조용','쾌적','추천','최고','만족','편리','맛있','즐거','아이','가족','편안','분위기','자연','시설'];
+  const negKeywords = ['별로','더러','불친절','좁','시끄','불편','비싸','냄새','벌레','모기','불만','최악','실망','노후','낡','더럽','위험','차갑','부족','관리'];
+
+  // Build per-camp sentiment from review data
+  const reviewMap = {};
+  REVIEWS_DATA.forEach(r => { reviewMap[r.kakao_id] = r; });
+
+  const campSentiments = CAMPS_DATA.map(camp => {
+    const rating = camp.rating || 0;
+    const reviewCount = camp.review_count || 0;
+
+    // Simple sentiment based on rating
+    let sentiment = 'neutral';
+    if (rating >= 4.0) sentiment = 'positive';
+    else if (rating <= 2.5) sentiment = 'negative';
+
+    return { ...camp, sentiment, reviewCount };
+  });
+
+  // Summary cards
+  const posCount = campSentiments.filter(c => c.sentiment === 'positive').length;
+  const negCount = campSentiments.filter(c => c.sentiment === 'negative').length;
+  const neuCount = campSentiments.length - posCount - negCount;
+  const totalReviews = CAMPS_DATA.reduce((s,c) => s + (c.review_count||0), 0);
+  const vip = CAMPS_DATA.find(c => c.name === VIP_NAME);
+
+  const totalNaverVisitor = CAMPS_DATA.reduce((s,c) => s + (c.naver_visitor_review||0), 0);
+  const totalNaverBlog = CAMPS_DATA.reduce((s,c) => s + (c.naver_blog_review||0), 0);
+  const vipNV = vip?.naver_visitor_review || 0;
+  const vipNB = vip?.naver_blog_review || 0;
+
+  document.getElementById('sent-summary').innerHTML = `
+    <div class="summary-card"><h4><span class="source-badge kakao">카카오</span> 전체 리뷰 수</h4><div class="value" style="color:#38bdf8">${totalReviews}</div></div>
+    <div class="summary-card"><h4><span class="source-badge naver">네이버</span> 방문자/블로그 리뷰</h4><div class="value" style="color:#2db400">${totalNaverVisitor} / ${totalNaverBlog}</div></div>
+    <div class="summary-card"><h4>긍정 캠핑장 (카카오 4.0+)</h4><div class="value good">${posCount}개</div></div>
+    <div class="summary-card"><h4>VIP캠핑장</h4><div class="value bad">카카오 ★${vip?.rating || '-'}<br><span style="font-size:16px;color:#2db400">네이버 방문${vipNV} 블로그${vipNB}</span></div></div>
+  `;
+
+  // Sentiment distribution
+  const grid = document.getElementById('sent-grid');
+
+  // Card 1: Overall sentiment bar
+  let html = `<div class="sent-card"><h3>전체 감성 분포</h3>
+    <div class="sent-bar">
+      <div class="pos-fill" style="width:${(posCount/CAMPS_DATA.length*100).toFixed(1)}%"></div>
+      <div class="neu-fill" style="width:${(neuCount/CAMPS_DATA.length*100).toFixed(1)}%"></div>
+      <div class="neg-fill" style="width:${(negCount/CAMPS_DATA.length*100).toFixed(1)}%"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#94a3b8">
+      <span style="color:#34d399">긍정 ${posCount}개 (${(posCount/CAMPS_DATA.length*100).toFixed(0)}%)</span>
+      <span>중립 ${neuCount}개</span>
+      <span style="color:#f87171">부정 ${negCount}개 (${(negCount/CAMPS_DATA.length*100).toFixed(0)}%)</span>
+    </div>
+  </div>`;
+
+  // Card 2: Keyword cloud
+  html += `<div class="sent-card"><h3>감성 키워드 사전</h3>
+    <p style="font-size:11px;color:#64748b;margin-bottom:10px">캠핑장 리뷰에서 자주 등장하는 긍정/부정 키워드</p>
+    <div class="keyword-cloud">
+      ${posKeywords.map(k => `<span class="keyword pos">${k}</span>`).join('')}
+      ${negKeywords.map(k => `<span class="keyword neg">${k}</span>`).join('')}
+    </div>
+  </div>`;
+
+  // Card 2.5: 잘나가는 캠핑장 성공 요인 가이드라인
+  html += `<div class="sent-card" style="grid-column:1/-1">
+    <h3 style="color:#34d399">잘나가는 캠핑장의 5가지 핵심 성공 포인트</h3>
+    <p style="font-size:11px;color:#64748b;margin-bottom:12px">반경 5km 내 인기도 TOP 10 캠핑장을 분석한 결과, 공통된 성공 패턴이 있습니다. (평균 평점 4.3 / 평균 블로그 239개)</p>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">
+      <div style="background:#065f4625;border-radius:10px;padding:14px;border-top:3px solid #34d399">
+        <div style="font-size:28px;font-weight:800;color:#34d399;margin-bottom:4px">1</div>
+        <div style="font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:6px">그늘·자연환경</div>
+        <div style="font-size:11px;color:#94a3b8;line-height:1.6">TOP 캠핑장 대부분 나무숲, 계곡, 산 조망 보유. <strong style="color:#34d399">뙤약볕 불만 0건</strong>. 자연 그늘이 없으면 차양 구조물이라도 필수. VIP의 가장 큰 약점이 바로 이것.</div>
+      </div>
+      <div style="background:#1e3a5f25;border-radius:10px;padding:14px;border-top:3px solid #3b82f6">
+        <div style="font-size:28px;font-weight:800;color:#3b82f6;margin-bottom:4px">2</div>
+        <div style="font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:6px">블로그 마케팅</div>
+        <div style="font-size:11px;color:#94a3b8;line-height:1.6">TOP 10 평균 블로그 리뷰 <strong style="color:#3b82f6">239개</strong>. 1위 양주르는 1,004개. 체험단·협찬 블로그가 검색 노출과 신규 유입의 핵심 엔진. 블로그 없으면 존재감 제로.</div>
+      </div>
+      <div style="background:#78350f25;border-radius:10px;padding:14px;border-top:3px solid #f59e0b">
+        <div style="font-size:28px;font-weight:800;color:#f59e0b;margin-bottom:4px">3</div>
+        <div style="font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:6px">리뷰 수 확보</div>
+        <div style="font-size:11px;color:#94a3b8;line-height:1.6">평점 5.0이어도 리뷰 1개면 신뢰도 0. 카카오 <strong style="color:#f59e0b">15개 이상</strong>, 캠핏 <strong style="color:#f59e0b">30개 이상</strong>이 신뢰 구간. 리뷰 이벤트(할인·굿즈)로 의도적 확보 필요.</div>
+      </div>
+      <div style="background:#3b076425;border-radius:10px;padding:14px;border-top:3px solid #a78bfa">
+        <div style="font-size:28px;font-weight:800;color:#a78bfa;margin-bottom:4px">4</div>
+        <div style="font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:6px">시설 차별화</div>
+        <div style="font-size:11px;color:#94a3b8;line-height:1.6">글램핑·카라반 캠핑장이 TOP에 <strong style="color:#a78bfa">30%</strong>. 일반 오토캠핑은 차별화 어려워 가격 경쟁에 빠짐. 수영장·놀이시설·뷰 등 <strong style="color:#a78bfa">"찍을 거리"</strong>가 인스타·블로그 확산의 핵심.</div>
+      </div>
+      <div style="background:#7f1d1d25;border-radius:10px;padding:14px;border-top:3px solid #f87171">
+        <div style="font-size:28px;font-weight:800;color:#f87171;margin-bottom:4px">5</div>
+        <div style="font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:6px">부정 리뷰 제로</div>
+        <div style="font-size:11px;color:#94a3b8;line-height:1.6">TOP 캠핑장은 <strong style="color:#f87171">소음·위생·불친절 불만 거의 없음</strong>. 부정 리뷰 1개가 긍정 10개보다 강력. 매너타임 안내, 청결 관리, 친절 응대 — 기본기가 곧 경쟁력.</div>
+      </div>
+    </div>
+    <div style="margin-top:12px;padding:10px 14px;background:#f59e0b10;border-radius:8px;border:1px dashed #f59e0b40">
+      <div style="font-size:12px;color:#f59e0b;font-weight:600">VIP캠핑장 적용 우선순위</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px;line-height:1.7">
+        <strong style="color:#f87171">즉시</strong>: 그늘막/차양 설치 + 빌라 소음 안내문 → 부정 리뷰 원인 차단<br>
+        <strong style="color:#fbbf24">1개월</strong>: 카카오+캠핏 리뷰 이벤트 시작 (재방문 할인, 리뷰 작성 시 음료 제공 등)<br>
+        <strong style="color:#34d399">3개월</strong>: 블로그 체험단 월 5건 이상 → 검색 노출 확보 → 자연 유입 증가
+      </div>
+    </div>
+  </div>`;
+
+  // Card 3: 종합순위 TOP 10
+  const topRanked = [...CAMPS_DATA].sort((a,b) => (b.popularity_score||0)-(a.popularity_score||0)).slice(0, 10);
+  html += `<div class="sent-card"><h3>종합순위 TOP 10</h3>
+    <p style="font-size:11px;color:#64748b;margin-bottom:6px;line-height:1.5">
+      <strong style="color:#94a3b8">종합순위 선정 기준 (100점 만점)</strong><br>
+      <span style="color:#fbbf24">카카오 평점(20)</span> + <span style="color:#fbbf24">카카오 리뷰수(15)</span> + <span style="color:#2db400">네이버 방문자리뷰(20)</span> + <span style="color:#2db400">네이버 블로그(15)</span> + <span style="color:#2db400">네이버 평점(10)</span> + <span style="color:#ff6b35">캠핏 리뷰(15)</span> + <span style="color:#a78bfa">예약채널(5)</span><br>
+      <span style="color:#64748b">평점만이 아닌, 리뷰 양·플랫폼 다각화·마케팅 활동까지 반영한 실질적 경쟁력 지표. openub 카드매출 데이터 확보 시 추가 반영 예정.</span>
+    </p>
+    <div style="display:grid;grid-template-columns:30px 1fr 50px;gap:4px 10px;align-items:center;margin-top:8px;font-size:12px">
+      <div style="color:#64748b;font-weight:600">순위</div><div style="color:#64748b;font-weight:600">캠핑장</div><div style="color:#64748b;font-weight:600;text-align:right">점수</div>
+    ${topRanked.map((c,i) => {
+      const d = c.score_detail || {};
+      const isVip = c.name === VIP_NAME;
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      const bg = isVip ? 'background:#f59e0b15;border-radius:6px;padding:4px 6px;border-left:3px solid #f59e0b;' : '';
+      const cnv = c.naver_visitor_review||0, cnb = c.naver_blog_review||0;
+      return \`<div style="font-size:16px;font-weight:700;color:\${i<3?'#f59e0b':'#94a3b8'};text-align:center">\${medal || (i+1)}</div>
+        <div style="\${bg}">
+          <span style="font-weight:600;color:\${isVip?'#f59e0b':'#f1f5f9'}">\${c.name}\${isVip?' (OUR)':''}</span>
+          <div style="font-size:10px;color:#64748b;margin-top:2px">
+            <span style="color:#fbbf24">카카오★\${c.rating||'-'}(\${c.review_count||0})</span>
+            <span style="color:#2db400;margin-left:6px">네이버 방문\${cnv} 블로그\${cnb}</span>
+            \${c.camfit_review_count ? '<span style="color:#ff6b35;margin-left:6px">캠핏'+c.camfit_review_count+'</span>' : ''}
+            \${c.has_own_website ? '<span style="color:#a78bfa;margin-left:6px">자체사이트</span>' : ''}
+          </div>
+          <div style="display:flex;gap:3px;margin-top:3px">
+            <span style="background:#fbbf2425;color:#fbbf24;padding:1px 4px;border-radius:3px;font-size:9px">카평\${d.kakao_rating||0}</span>
+            <span style="background:#fbbf2425;color:#fbbf24;padding:1px 4px;border-radius:3px;font-size:9px">카리\${d.kakao_review||0}</span>
+            <span style="background:#2db40025;color:#2db400;padding:1px 4px;border-radius:3px;font-size:9px">네방\${d.naver_visitor||0}</span>
+            <span style="background:#2db40025;color:#2db400;padding:1px 4px;border-radius:3px;font-size:9px">네블\${d.naver_blog||0}</span>
+            \${d.naver_rating ? '<span style="background:#2db40025;color:#2db400;padding:1px 4px;border-radius:3px;font-size:9px">네평'+d.naver_rating+'</span>' : ''}
+            <span style="background:#ff6b3525;color:#ff6b35;padding:1px 4px;border-radius:3px;font-size:9px">캠핏\${d.camfit_review||0}</span>
+            \${d.channel ? '<span style="background:#a78bfa25;color:#a78bfa;padding:1px 4px;border-radius:3px;font-size:9px">채널'+d.channel+'</span>' : ''}
+          </div>
+        </div>
+        <div style="font-size:18px;font-weight:800;color:\${c.popularity_score>=60?'#f87171':c.popularity_score>=40?'#fbbf24':'#64748b'};text-align:right">\${c.popularity_score}</div>\`;
+    }).join('')}
+    </div>
+    <div style="margin-top:12px;padding:10px 14px;background:#1e40af15;border-radius:8px;border-left:3px solid #3b82f6">
+      <div style="font-size:12px;color:#60a5fa;font-weight:600;margin-bottom:4px">종합순위가 말해주는 것</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.7">
+        <strong style="color:#cbd5e1">평점만 높으면 부족</strong> — 리뷰 1개 5.0점보다 리뷰 529개 4.2점(양주송천)이 종합 1위. 실질적 경쟁력은 '양'이 만든다.<br>
+        <strong style="color:#cbd5e1">블로그가 핵심 무기</strong> — TOP 3 모두 블로그 100개 이상. 블로그 없으면 네이버 검색 유입 제로.<br>
+        <strong style="color:#cbd5e1">캠핏 리뷰가 반전 카드</strong> — VIP는 카카오 평점은 최하위지만, 캠핏 47개 리뷰 덕에 종합 9위까지 올라옴. 캠핏 사용자 만족도는 나쁘지 않다는 뜻.<br>
+        <strong style="color:#cbd5e1">VIP 목표</strong> — 그늘막+리뷰 이벤트+블로그 체험단 → 카카오 4.0+ 회복 시 종합 TOP 5 진입 가능.
+      </div>
+    </div>
+  </div>`;
+
+  // Card 4: 종합순위 하위 8
+  const worstRated = [...CAMPS_DATA].sort((a,b) => (a.popularity_score||0)-(b.popularity_score||0)).slice(0, 8);
+  html += `<div class="sent-card"><h3>종합순위 하위 8</h3>
+    <p style="font-size:11px;color:#64748b;margin-bottom:8px;line-height:1.5">기준: <strong style="color:#94a3b8">종합순위 점수</strong> 낮은 순. 평점·리뷰·블로그·캠핏·예약채널 모두 부족한 곳. 리뷰 수 자체가 적어 존재감이 없거나, 관리가 안 되는 캠핑장.</p>
+    ${worstRated.map(c => {
+      const cls = c.rating >= 4 ? 'high' : c.rating >= 3 ? 'mid' : 'low';
+      const isVip = c.name === VIP_NAME;
+      const cnv = c.naver_visitor_review||0, cnb = c.naver_blog_review||0;
+      // 왜 못 올라가는지 분석
+      let why2 = '';
+      if (isVip) why2 = '<span style="color:#f59e0b;font-size:10px"> | 뙤약볕+빌라 소음 민원 → 구조적 문제. 시설 투자 없이는 회복 불가</span>';
+      else if (c.review_count >= 8 && c.rating <= 2.0) why2 = '<span style="color:#f87171;font-size:10px"> | 리뷰 다수+저평점 → 반복적 불만. 시설 노후·서비스 부재 고착화</span>';
+      else if (c.review_count <= 3) why2 = '<span style="color:#64748b;font-size:10px"> | 소수 부정 리뷰에 평점 추락. 긍정 리뷰 확보 시 반등 가능성 있음</span>';
+      else why2 = '<span style="color:#fbbf24;font-size:10px"> | 중간 리뷰수에 저평점 → 일부 개선으로 3.5+ 회복 가능</span>';
+      return `<div class="review-item" style="${isVip?'background:#f59e0b15;border-radius:6px;padding:10px':''}"><span class="camp-name">${c.name}${isVip?' OUR':''}</span><span class="score ${cls}"><span class="source-badge kakao">카카오</span> ★${c.rating}</span>${why2}<br><span style="font-size:11px;color:#64748b">${c.distance_km}km | 카카오 리뷰 ${c.review_count}개</span><br><span style="font-size:11px;color:#2db400">네이버 ${c.naver_rating ? '★'+c.naver_rating+' | ' : ''}방문자 ${cnv} | 블로그 ${cnb}</span></div>`;
+    }).join('')}
+    <div style="margin-top:12px;padding:10px 14px;background:#7f1d1d15;border-radius:8px;border-left:3px solid #ef4444">
+      <div style="font-size:12px;color:#f87171;font-weight:600;margin-bottom:4px">왜 이 수준에서 벗어나기 어려운가?</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.7">
+        <strong style="color:#cbd5e1">1. 구조적 문제</strong> — VIP(뙤약볕·빌라 민원), 산막골(개미), 대궐(시설 노후) 등 시설 투자 없이 리뷰만으로 해결 불가능한 물리적 문제.<br>
+        <strong style="color:#cbd5e1">2. 부정 리뷰의 지속력</strong> — 카카오맵 리뷰는 삭제 불가. 부정 리뷰 1개가 평점에 미치는 영향이 리뷰 적은 곳일수록 치명적 (3건 중 1건 = 33%).<br>
+        <strong style="color:#cbd5e1">3. 악순환</strong> — 저평점 → 검색 노출 하락 → 방문객 감소 → 리뷰 없음 → 평점 고착. 의도적 리뷰 이벤트 없이는 자연 회복 거의 불가.<br>
+        <strong style="color:#cbd5e1">4. 탈출 전략</strong> — (1) 물리적 문제 먼저 해결 (2) 개선 후 재방문 유도 (3) 카카오+네이버 리뷰 동시 확보 (4) 블로그 체험단으로 인지도 회복.
+      </div>
+    </div>
+  </div>`;
+
+  // Card 5: VIP 최하위 원인 분석
+  html += `<div class="sent-card" style="grid-column:1/-1"><h3>VIP캠핑장 최하위 원인 분석</h3>
+    <p style="font-size:11px;color:#64748b;margin-bottom:12px">카카오맵 실제 방문자 리뷰 3건을 분석한 결과, 반복되는 불만 키워드가 명확합니다.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:15px">
+      <div style="background:#7f1d1d25;border-radius:8px;padding:15px;border-left:3px solid #ef4444">
+        <div style="font-size:13px;color:#f87171;font-weight:600;margin-bottom:8px">핵심 불만 사항 (카카오맵 리뷰 원문)</div>
+        <div style="font-size:11px;color:#fca5a5;line-height:1.8">
+          <div style="margin:6px 0;padding:8px;background:#7f1d1d20;border-radius:6px">
+            <strong>1. 뙤약볕 (그늘 없음)</strong><br>
+            <span style="color:#94a3b8">"나무가 없어서 해만 뜨면 뙤약볕" "오전 10시~오후 5시 엄청난 뙤약볕" — 3건 중 3건 모두 언급</span>
+          </div>
+          <div style="margin:6px 0;padding:8px;background:#7f1d1d20;border-radius:6px">
+            <strong>2. 빌라 인접 소음 민원</strong><br>
+            <span style="color:#94a3b8">"빌라가 있어 연기 민원" "저녁 8시에 떠든다고 경찰 왔어요" "대화도 크게 할 수 없고" — 2건 언급</span>
+          </div>
+          <div style="margin:6px 0;padding:8px;background:#7f1d1d20;border-radius:6px">
+            <strong>3. 캠핑 분위기 부재</strong><br>
+            <span style="color:#94a3b8">"캠핑이 아니라 군인들 야외 적응훈련" "뭔가 얘기도 하고 즐기길 원한다면 여긴 피하세요" — 종합 불만</span>
+          </div>
+        </div>
+      </div>
+      <div style="background:#065f4625;border-radius:8px;padding:15px;border-left:3px solid #34d399">
+        <div style="font-size:13px;color:#34d399;font-weight:600;margin-bottom:8px">반면, 블로그 리뷰는 긍정적 (네이버 블로그 ${vipNB}개)</div>
+        <div style="font-size:11px;color:#86efac;line-height:1.8">
+          <div style="margin:6px 0;padding:8px;background:#065f4620;border-radius:6px">
+            <span style="color:#94a3b8">"관리가 잘 되고 접근성이 좋은 곳" "깨끗한 시설" "계곡물이 흐르고 있어 물놀이 최적"</span>
+          </div>
+          <div style="margin:6px 0;padding:8px;background:#065f4620;border-radius:6px">
+            <span style="color:#94a3b8">블로그는 대부분 협찬/체험단 리뷰로 긍정 편향. 실제 방문자 평가(카카오)와 온도차가 큼.</span>
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:12px;color:#fbbf24;font-weight:600">현재 상태</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:4px">
+          <span class="source-badge kakao">카카오</span> ★${vip?.rating} (${vip?.review_count}건) — 실사용자 평가 최하위<br>
+          <span class="source-badge naver">네이버</span> 방문자 ${vipNV} / 블로그 ${vipNB} — 블로그 마케팅은 활발<br>
+          <strong style="color:#f87171">결론: 블로그 마케팅은 하고 있으나, 실제 방문 경험이 기대에 못 미침</strong>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:15px">
+      <div style="background:#7f1d1d30;border-radius:8px;padding:15px">
+        <div style="font-size:13px;color:#f87171;font-weight:600">즉시 해결 필요</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:5px;line-height:1.7">
+          1) <strong style="color:#fca5a5">그늘막/차양 설치</strong> — 3건 모두 뙤약볕 불만. 파라솔이나 그늘 구조물 필수<br>
+          2) <strong style="color:#fca5a5">소음 기준 사전 안내</strong> — 빌라 민원 방지를 위한 매너타임 안내문 강화
+        </div>
+      </div>
+      <div style="background:#78350f30;border-radius:8px;padding:15px">
+        <div style="font-size:13px;color:#fbbf24;font-weight:600">리뷰 회복 전략</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:5px;line-height:1.7">
+          1) 시설 개선 후 <strong style="color:#fbbf24">기존 부정 리뷰어 재초대</strong><br>
+          2) 카카오맵 리뷰 이벤트 (현재 3건 → 15건 이상 확보 시 평점 반전 가능)<br>
+          3) 블로그 마케팅 → 카카오/네이버 방문자 리뷰 유도로 전환
+        </div>
+      </div>
+      <div style="background:#065f4630;border-radius:8px;padding:15px">
+        <div style="font-size:13px;color:#34d399;font-weight:600">살릴 수 있는 강점</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:5px;line-height:1.7">
+          - 사이트 ${vip?.site_count || '?'}개 (중대형 규모)<br>
+          - 서울 30분 접근성<br>
+          - 석현천 계곡 바로 앞<br>
+          - 신생 캠핑장 (시설 깨끗)<br>
+          - 근접 경쟁사 평점도 3.3 수준 → 조금만 개선하면 역전 가능
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  grid.innerHTML = html;
+}
+</script>
+</body>
+</html>
